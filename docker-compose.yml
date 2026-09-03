@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-krate}
+      POSTGRES_USER: ${POSTGRES_USER:-krate}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-krate}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-krate} -d ${POSTGRES_DB:-krate}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build: ./Krate
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-krate}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-krate}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-krate}
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?Define APP_JWT_SECRET en el fichero .env}
+      APP_JWT_TTL_HOURS: ${APP_JWT_TTL_HOURS:-24}
+      APP_CORS_ORIGINS: ${APP_CORS_ORIGINS:-http://localhost:8081,http://localhost:8082}
+      APP_PUBLIC_VOTING_URL: ${APP_PUBLIC_VOTING_URL:-http://localhost:8082}
+      APP_UPLOAD_DIR: /data/uploads
+      APP_SEED_ENABLED: ${APP_SEED_ENABLED:-false}
+    volumes:
+      - uploads:/data/uploads
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  management:
+    build: ./management-app
+    ports:
+      - "${MANAGEMENT_PORT:-8081}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  voting:
+    build: ./voting-app
+    ports:
+      - "${VOTING_PORT:-8082}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  uploads:

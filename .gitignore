@@ -1,0 +1,19 @@
+# Secretos y configuracion local
+.env
+*.local
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+
+# Salidas de build y dependencias (cada subproyecto tiene ademas su propio .gitignore)
+**/node_modules/
+**/dist/
+**/.angular/
+**/target/
+
+# Imagenes subidas en desarrollo local
+Krate/uploads/
