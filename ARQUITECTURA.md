@@ -66,73 +66,126 @@ flowchart LR
 
 ### 1.2 Contenedores y despliegue
 
-El sistema se despliega como cuatro contenedores Docker orquestados con `docker-compose.yml` en la raíz del repositorio. Todos comparten la red interna que crea Compose; solo los tres primeros publican puertos al host.
+El sistema se ejecuta como una pila de contenedores Docker definida en `docker-compose.yml`, en la raíz del repositorio. La misma pila sirve para dos entornos:
 
-| Contenedor | Imagen | Puerto host | Responsabilidad |
-| --- | --- | --- | --- |
-| `management` | nginx 1.27 + build de Angular 22 | 8081 | Sirve la SPA del panel y hace proxy de `/api/` al backend. |
-| `voting` | nginx 1.27 + build de Angular 22 | 8082 | Sirve la SPA de voto y hace proxy de `/api/` al backend. |
-| `backend` | Eclipse Temurin 21 JRE + jar de Spring Boot 4.1 | 8080 | API REST, autenticación, reglas de negocio, imágenes, migraciones. |
-| `postgres` | postgres:17 | — (solo red interna) | Persistencia. |
+- **Local**: `docker compose up --build -d` construye las tres imágenes propias y publica los puertos 8081, 8082 y 8080 en el host.
+- **Producción**: un VPS (Hetzner CX22, Ubuntu 24.04) ejecuta la pila con el override `docker-compose.prod.yml`, que sustituye `build` por imágenes publicadas en GitHub Container Registry (GHCR), retira la publicación de puertos de los cuatro servicios y añade un quinto contenedor, `caddy`, que es el único alcanzable desde internet y termina TLS para los dos subdominios públicos `<VOTING_HOST>` (voting app, el que va en los QR) y `<PANEL_HOST>` (panel).
+
+Todos los contenedores comparten la red interna que crea Compose.
+
+| Contenedor | Imagen | Puerto host (local) | Puerto host (producción) | Responsabilidad |
+| --- | --- | --- | --- | --- |
+| `caddy` | caddy:2-alpine | — (no se levanta) | 80 y 443 | Proxy inverso con HTTPS automático (Let's Encrypt). Enruta `<VOTING_HOST>` → `voting:80` y `<PANEL_HOST>` → `management:80`, y redirige HTTP a HTTPS. |
+| `management` | nginx 1.27 + build de Angular 22 | 8081 | — (solo red interna) | Sirve la SPA del panel y hace proxy de `/api/` al backend. |
+| `voting` | nginx 1.27 + build de Angular 22 | 8082 | — (solo red interna) | Sirve la SPA de voto y hace proxy de `/api/` al backend. |
+| `backend` | Eclipse Temurin 21 JRE + jar de Spring Boot 4.1 | 127.0.0.1:8080 | — (solo red interna) | API REST, autenticación, reglas de negocio, imágenes, migraciones. |
+| `postgres` | postgres:17 | — (solo red interna) | — (solo red interna) | Persistencia. |
 
 Volúmenes persistentes:
 
 - `pgdata`: datos de PostgreSQL.
 - `uploads`: imágenes de los items, montado en `/data/uploads` del backend.
+- `caddy_data` y `caddy_config` (solo producción): certificados TLS y estado de Caddy, para que las renovaciones y los reinicios no vuelvan a pedir certificados a Let's Encrypt.
 
 Decisiones clave de este nivel:
 
-- **Los frontends nunca conocen la URL del backend.** Llaman a rutas relativas `/api/...` y es nginx quien las redirige al servicio `backend` de la red de Compose. En desarrollo, el servidor de Angular hace lo mismo mediante `proxy.conf.json`. Así el mismo build sirve para cualquier entorno.
+- **Los frontends nunca conocen la URL del backend.** Llaman a rutas relativas `/api/...` y es nginx quien las redirige al servicio `backend` de la red de Compose. En desarrollo, el servidor de Angular hace lo mismo mediante `proxy.conf.json`. Así el mismo build sirve para cualquier entorno, incluido producción, donde las imágenes son exactamente las que se probaron en la integración continua.
 - **Un único punto de entrada para las imágenes.** El backend las sirve en `/api/files/{nombre}`, y por tanto pasan también por el proxy de nginx. La SPA no necesita conocer rutas de ficheros.
-- **El enlace público de un punto de votación** se construye en el backend a partir de la variable `APP_PUBLIC_VOTING_URL`, de modo que el panel muestra un enlace correcto aunque la voting app se sirva desde otro dominio.
+- **El enlace público de un punto de votación** se construye en el backend a partir de la variable `APP_PUBLIC_VOTING_URL`. En producción vale `https://<VOTING_HOST>`, de modo que el panel, servido desde `<PANEL_HOST>`, genera enlaces y códigos QR que apuntan al dominio correcto.
+- **Terminación TLS en un solo punto.** Caddy obtiene y renueva los certificados de Let's Encrypt y redirige HTTP a HTTPS; los nginx siguen sirviendo HTTP interno sin cambios en su configuración. HTTPS no es solo una medida de seguridad: `crypto.randomUUID` (identificador del votante) y `navigator.clipboard` (botón de copiar enlace del panel) solo están disponibles en contextos seguros, y en un móvil sin HTTPS la voting app tendría que recurrir a los *fallbacks*.
+- **Dos orígenes distintos en producción.** Voting app y panel se sirven en dos subdominios, pero cada uno llama a `/api` relativo a través de su propio nginx, así que el navegador siempre ve un único origen y CORS no interviene. `APP_CORS_ORIGINS` se fija de todos modos a los dos orígenes HTTPS para que la API rechace cualquier otro.
+- **Imágenes inmutables desde el registro.** El servidor no compila nada: descarga `ghcr.io/<owner>/krate-backend`, `krate-management` y `krate-voting`, etiquetadas `latest` y `sha-<commit>`. Fijar `IMAGE_TAG` a una etiqueta `sha-...` permite volver a una versión anterior con un `compose up`, sin reconstruir. El VPS tampoco necesita Maven ni Node, lo que reduce su tamaño y su superficie de ataque.
+- **Nada expuesto salvo Caddy.** El compose base publica el backend solo en `127.0.0.1:8080`, de modo que ni siquiera un `docker compose up` sin override dejaría la API abierta al exterior; el override de producción retira además los puertos de los nginx.
+
+#### Flujo de despliegue continuo
+
+Cada `push` a `main` (o una ejecución manual) dispara el workflow `.github/workflows/deploy.yml`, con tres trabajos encadenados; si uno falla, los siguientes no se ejecutan y el servidor sigue con la versión anterior.
+
+1. **`test`.** En un *runner* `ubuntu-latest`: Java 21 y `./mvnw -B verify` (los tests de integración levantan PostgreSQL con Testcontainers sobre el Docker del *runner*); Node 22, `npm ci`, `ng build` y `ng test` en `management-app` y `voting-app`. Qué cubre cada uno de estos pasos está en `TESTING.md`.
+2. **`build-push`.** Construye las tres imágenes con `docker/build-push-action`, reutilizando caché de capas de GitHub Actions, y las publica en GHCR autenticándose con el `GITHUB_TOKEN` del propio workflow. Cada imagen recibe las etiquetas `latest` y `sha-<commit>`.
+3. **`deploy`.** Entra por SSH en el VPS con los secretos del repositorio `DEPLOY_HOST`, `DEPLOY_USER` y `DEPLOY_SSH_KEY` y ejecuta, en `/opt/krate`: `git pull --ff-only` (para recoger cambios en los ficheros de Compose o el `Caddyfile`), `docker compose -f docker-compose.yml -f docker-compose.prod.yml pull`, `... up -d --remove-orphans` y `docker image prune -f`. Compose solo recrea los contenedores cuya imagen ha cambiado; PostgreSQL y Caddy no se reinician en un despliegue normal.
+
+El servidor se preparó una sola vez con `deploy/install-server.sh` (Docker, cortafuegos, usuario de despliegue, clave SSH para Actions, `.env` con los secretos) y desde entonces no requiere intervención manual. Si el repositorio es privado, las imágenes de GHCR también lo son y el servidor hace un único `docker login ghcr.io` con un token de solo lectura (`read:packages`). La guía completa de instalación, operación y apagado está en `deploy/DESPLIEGUE.md`.
 
 #### Diagrama 2 · Contenedores y despliegue
 
+Representa la pila de producción. La pila local es la misma sin `caddy` y con los puertos 8081, 8082 y 127.0.0.1:8080 publicados en el host.
+
 **Especificación para draw.io**
 
-- Lienzo horizontal dividido en tres zonas verticales de izquierda a derecha: **Clientes**, **Host Docker (red `proyecto_default`)** y **Volúmenes**. Dibuja las zonas como contenedores (swimlanes) con fondo `#f3f5f8` y título en la parte superior.
-- Zona *Clientes*: dos iconos de navegador. Arriba **Navegador del gestor** (escritorio), abajo **Navegador del votante** (móvil).
-- Zona *Host Docker*: cuatro rectángulos redondeados con borde `#5c6472` y relleno blanco, cada uno con nombre en negrita y dos líneas de detalle:
-  - `management` — "nginx 1.27 · SPA Angular 22" — "host :8081 → :80". Colócalo arriba a la izquierda de la zona.
-  - `voting` — "nginx 1.27 · SPA Angular 22" — "host :8082 → :80". Debajo de `management`.
-  - `backend` — "Spring Boot 4.1 · Java 21" — "host :8080 → :8080". A la derecha de los dos anteriores, centrado verticalmente entre ellos. Relleno `#e4f4eb` para destacarlo como núcleo.
+- Lienzo horizontal dividido en cuatro zonas verticales de izquierda a derecha: **Internet**, **GitHub**, **VPS Hetzner · Ubuntu 24.04 · Docker (red `krate_default`)** y **Volúmenes**. Dibuja las zonas como contenedores (swimlanes) con fondo `#f3f5f8` y título en la parte superior. La zona *GitHub* puede ser estrecha y situarse arriba, entre *Internet* y el VPS.
+- Zona *Internet*: dos iconos de navegador. Arriba **Navegador del gestor** (escritorio), abajo **Navegador del votante** (móvil). Debajo de ambos, un rectángulo neutro pequeño **DuckDNS** con el texto "`<PANEL_HOST>`, `<VOTING_HOST>` → IP del VPS", y otro **Let's Encrypt**.
+- Zona *GitHub*: dos rectángulos neutros apilados: **GitHub Actions** ("test → build-push → deploy") y **GHCR** ("ghcr.io/<owner>/krate-backend · krate-management · krate-voting · `latest`, `sha-<commit>`").
+- Zona *VPS*: cinco rectángulos redondeados con borde `#5c6472` y relleno blanco, cada uno con nombre en negrita y dos líneas de detalle:
+  - `caddy` — "Caddy 2 · TLS automático" — "host :80/:443 → :80/:443". Pegado al borde izquierdo de la zona, centrado verticalmente. Relleno `#e4f4eb`, porque es el único punto de entrada.
+  - `management` — "nginx 1.27 · SPA Angular 22" — "sin puertos publicados". A la derecha de `caddy`, arriba.
+  - `voting` — "nginx 1.27 · SPA Angular 22" — "sin puertos publicados". Debajo de `management`.
+  - `backend` — "Spring Boot 4.1 · Java 21" — "sin puertos publicados". A la derecha de los dos anteriores, centrado verticalmente entre ellos. Relleno `#e4f4eb` para destacarlo como núcleo.
   - `postgres` — "PostgreSQL 17" — "solo red interna :5432". A la derecha de `backend`. Usa la forma *cilindro* de base de datos.
-- Zona *Volúmenes*: dos cilindros grises `#eceef2`: **pgdata** y **uploads (/data/uploads)**.
+- Zona *Volúmenes*: tres cilindros grises `#eceef2`: **pgdata**, **uploads (/data/uploads)** y **caddy_data (certificados)**.
 - Conexiones (flechas sólidas, punta cerrada):
-  - Navegador del gestor → `management`: "HTTP :8081 · HTML/JS/CSS".
-  - Navegador del votante → `voting`: "HTTP :8082 · HTML/JS/CSS".
+  - Navegador del gestor → `caddy`: "HTTPS · `<PANEL_HOST>`".
+  - Navegador del votante → `caddy`: "HTTPS · `<VOTING_HOST>`/p/{code}".
+  - `caddy` → `management`: "reverse_proxy management:80".
+  - `caddy` → `voting`: "reverse_proxy voting:80".
   - `management` → `backend`: "proxy /api/ → backend:8080".
   - `voting` → `backend`: "proxy /api/ → backend:8080".
   - `backend` → `postgres`: "JDBC :5432".
   - `backend` → **uploads**: "lee/escribe imágenes".
   - `postgres` → **pgdata**: "datos".
-- Añade una nota amarilla (`#fbf3df`) junto a `backend`: "Variables: SPRING_DATASOURCE_*, APP_JWT_SECRET, APP_PUBLIC_VOTING_URL, APP_CORS_ORIGINS, APP_UPLOAD_DIR". Otra junto a los nginx: "`location ^~ /api/` tiene prioridad sobre las reglas de assets estáticos".
-- Flecha discontinua de `postgres` a `backend` con etiqueta "depends_on: service_healthy (pg_isready)".
+  - `caddy` → **caddy_data**: "certificados".
+- Conexiones discontinuas (dependencias y configuración):
+  - Navegadores → **DuckDNS**: "resolución DNS".
+  - `caddy` ↔ **Let's Encrypt**: "ACME · emisión y renovación".
+  - **GitHub Actions** → **GHCR**: "docker push".
+  - **GitHub Actions** → zona *VPS* (al borde de la zona): "SSH · compose pull + up -d".
+  - Zona *VPS* → **GHCR**: "docker pull".
+  - `postgres` → `backend`: "depends_on: service_healthy (pg_isready)".
+- Añade una nota amarilla (`#fbf3df`) junto a `caddy`: "deploy/Caddyfile: `{$VOTING_HOST} { reverse_proxy voting:80 }` · `{$PANEL_HOST} { reverse_proxy management:80 }`". Otra junto a `backend`: "Variables: SPRING_DATASOURCE_*, APP_JWT_SECRET, APP_PUBLIC_VOTING_URL=https://<VOTING_HOST>, APP_CORS_ORIGINS, APP_UPLOAD_DIR, APP_SEED_ENABLED=false". Otra junto a los nginx: "`location ^~ /api/` tiene prioridad sobre las reglas de assets estáticos". Y una en el título de la zona VPS: "ufw: solo 22, 80 y 443 · fail2ban en SSH".
 
 ```mermaid
 flowchart LR
-  subgraph Clientes
+  subgraph Internet
     NG[Navegador gestor]
     NV[Navegador votante]
+    DNS[DuckDNS]
+    LE[Let's Encrypt]
   end
-  subgraph Docker["Host Docker · red compose"]
-    M[management · nginx :8081]
-    V[voting · nginx :8082]
-    B[backend · Spring Boot :8080]
+  subgraph GitHub
+    GA[GitHub Actions<br/>test → build-push → deploy]
+    GHCR[(GHCR<br/>krate-backend · krate-management · krate-voting)]
+  end
+  subgraph VPS["VPS Hetzner · Ubuntu 24.04 · Docker"]
+    C[caddy · :80/:443 · TLS]
+    M[management · nginx]
+    V[voting · nginx]
+    B[backend · Spring Boot]
     P[(postgres 17)]
   end
   subgraph Vol[Volúmenes]
     PD[(pgdata)]
     UP[(uploads)]
+    CD[(caddy_data)]
   end
-  NG --> M
-  NV --> V
+  NG -->|"HTTPS PANEL_HOST"| C
+  NV -->|"HTTPS VOTING_HOST/p/code"| C
+  NG -.-> DNS
+  NV -.-> DNS
+  C -.->|ACME| LE
+  C -->|reverse_proxy| M
+  C -->|reverse_proxy| V
   M -->|proxy /api/| B
   V -->|proxy /api/| B
   B -->|JDBC| P
   B --> UP
   P --> PD
+  C --> CD
+  GA -.->|docker push| GHCR
+  GA -.->|"SSH · compose pull + up"| VPS
+  VPS -.->|docker pull| GHCR
 ```
+
+---
 
 ### 1.3 Principios de diseño
 
@@ -142,6 +195,7 @@ flowchart LR
 - **Borrado lógico.** Items, votaciones y puntos se marcan con `deleted_at` en lugar de eliminarse, de modo que las estadísticas históricas se conservan íntegras.
 - **Integridad garantizada en la base de datos**, no solo en el código: un índice único parcial impide dos instancias activas en el mismo punto, y una restricción única impide que un dispositivo vote dos veces en la misma instancia.
 - **Frontends autocontenidos.** Fuente (Nunito) e iconos (lucide-angular) van empaquetados en el build; no hay peticiones a CDN en tiempo de ejecución, lo que permite operar la voting app en redes sin salida a internet.
+- **Infraestructura reproducible y desechable.** El servidor de producción se levanta con un script idempotente (`deploy/install-server.sh`), un override de Compose y un workflow de GitHub Actions; no hay nada configurado a mano. Al terminar el periodo de uso se destruye el VPS y se eliminan los subdominios sin dejar rastro, y volver a desplegar en otro servidor es repetir los mismos pasos.
 
 ---
 
@@ -294,7 +348,9 @@ erDiagram
 
 **Autorización de datos.** No hay roles: todos los gestores tienen los mismos permisos sobre sus propios datos. La separación se consigue filtrando por `owner_id` en todas las consultas de gestión.
 
-**CORS.** En despliegue con Docker no es necesario porque nginx sirve frontend y API bajo el mismo origen. Se mantiene configurable (`APP_CORS_ORIGINS`) para desarrollo local y para despliegues en dominios distintos.
+**CORS.** Ni en Docker local ni en producción interviene, porque cada frontend llama a `/api` a través de su propio nginx y el navegador ve un único origen. En producción `APP_CORS_ORIGINS` se fija de todos modos a `https://<PANEL_HOST>,https://<VOTING_HOST>` para que la API rechace peticiones desde cualquier otro origen; en desarrollo local vale `http://localhost:4200,http://localhost:4300`, ya que los servidores de Angular corren en puertos distintos al backend.
+
+**Transporte y servidor.** En producción todo el tráfico entra por Caddy en HTTPS: obtiene y renueva los certificados de Let's Encrypt, redirige el puerto 80 al 443 y aplica sus valores por defecto de TLS (1.2 o superior). Los nginx propagan `X-Forwarded-For` y `X-Forwarded-Proto` al backend. Ningún otro contenedor publica puertos, y en el sistema operativo `ufw` solo admite 22, 80 y 443 y `fail2ban` bloquea los intentos repetidos de acceso por SSH; el acceso es exclusivamente por clave, con un usuario `krate` sin privilegios de administrador que es el que usa GitHub Actions para desplegar. Los secretos de la aplicación (`APP_JWT_SECRET`, `POSTGRES_PASSWORD`) viven únicamente en el `.env` del servidor, generados con `openssl rand` durante la instalación, y las credenciales que necesita el workflow (host, usuario y clave SSH) están en los *secrets* del repositorio de GitHub, nunca en el código.
 
 #### Diagrama 5 · Secuencia de autenticación del gestor
 
@@ -618,23 +674,27 @@ Toda la configuración del backend se lee de variables de entorno con valores po
 | `APP_PUBLIC_VOTING_URL` | Base para construir `publicUrl` de los puntos | `http://localhost:4300` |
 | `APP_UPLOAD_DIR` | Carpeta de imágenes | `./uploads` (en Docker `/data/uploads`) |
 | `SPRING_DOCKER_COMPOSE_ENABLED` | Desactiva el arranque automático de PostgreSQL dentro del contenedor | `false` en la imagen |
-| `APP_SEED_ENABLED` | Activa `DataInitializer`: **vacía la base de datos en cada arranque** y carga datos de prueba | `false` |
+| `APP_SEED_ENABLED` | Activa `DataInitializer`: **vacía la base de datos en cada arranque** y carga datos de prueba | `false` (el override de producción lo fuerza a `false`) |
+
+Variables adicionales que leen Compose y Caddy (no el backend):
+
+| Variable | Uso | Entorno |
+| --- | --- | --- |
+| `POSTGRES_DB/USER/PASSWORD` | Credenciales con las que se inicializa PostgreSQL y conecta el backend | Docker local y producción |
+| `BACKEND_PORT`, `MANAGEMENT_PORT`, `VOTING_PORT` | Puertos publicados en el host (8080 solo en `127.0.0.1`, 8081, 8082) | Solo Docker local; producción no publica ninguno |
+| `VOTING_HOST`, `PANEL_HOST` | Subdominios públicos. Caddy los usa como nombres de sitio en el `Caddyfile` y de ellos derivan `APP_PUBLIC_VOTING_URL` y `APP_CORS_ORIGINS` | Producción |
+| `GHCR_OWNER` | Propietario de las imágenes `ghcr.io/<owner>/krate-*` | Producción |
+| `IMAGE_TAG` | Etiqueta de las imágenes a desplegar: `latest` por defecto; una etiqueta `sha-<commit>` fija o retrocede a una versión concreta | Producción |
 
 Entornos:
 
 - **Desarrollo.** `./mvnw spring-boot:run` levanta PostgreSQL con `Krate/compose.yaml`; `npm start` en cada frontend sirve en 4200 y 4300 con proxy a 8080.
-- **Despliegue.** `docker compose up --build -d` con un `.env` en la raíz (plantilla en `.env.example`). Las imágenes se construyen en dos etapas (Maven o Node para compilar; JRE o nginx para ejecutar) y el backend corre con un usuario sin privilegios.
+- **Docker local.** `docker compose up --build -d` con un `.env` en la raíz (plantilla en `.env.example`). Las imágenes se construyen en dos etapas (Maven o Node para compilar; JRE o nginx para ejecutar) y el backend corre con un usuario sin privilegios. Sin HTTPS: panel en `http://localhost:8081` y voting app en `http://localhost:8082`.
+- **Producción.** VPS Hetzner CX22 con Ubuntu 24.04, preparado por `deploy/install-server.sh`, con el repositorio clonado en `/opt/krate` y el `.env` generado durante la instalación. La pila se arranca con `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`: imágenes descargadas de GHCR, Caddy con HTTPS delante de los nginx, ningún puerto interno publicado y `APP_SEED_ENABLED=false` forzado. Los despliegues los ejecuta GitHub Actions en cada `push` a `main` (sección 1.2). Una tarea `cron` lanza `deploy/backup.sh` cada noche: `pg_dump` de la base de datos y copia del volumen `uploads` en `/opt/krate/backups/`, conservando 14 días. La operación diaria (logs, reinicios, restaurar una copia, rotar `APP_JWT_SECRET`, apagado final) está documentada en `deploy/DESPLIEGUE.md`.
 
 ### 2.9 Estrategia de pruebas
 
-| Nivel | Herramienta | Qué cubre |
-| --- | --- | --- |
-| Unitarias del backend | JUnit 5 + AssertJ, sin Spring | Las tres estrategias (`voting/strategy`): configuración válida e inválida, papeletas válidas e inválidas y puntuación con ejemplos numéricos (incluido Borda con papeletas parciales), más el registro `VotingStrategies`. |
-| Integración del backend | JUnit 5 + MockMvc + Testcontainers (PostgreSQL 17 real) | Registro, login, 401, validaciones; CRUD de items con imagen y aislamiento entre gestores; flujo completo lanzar → votar → doble papeleta 409 → detener → estadísticas; flujos LIMITED y RANKING de extremo a extremo; bloqueos con instancia activa (incluido cambio de tipo); borrado lógico y su efecto en listados, estadísticas y enlace público. |
-| Unitarias de frontend | Vitest (jsdom) | Arranque de los componentes raíz. |
-| Extremo a extremo manual | `curl` contra la pila Docker y capturas headless con Chromium | Comprueba nginx, proxy, imágenes y renderizado de las pantallas. |
-
-Los tests del backend arrancan la aplicación completa contra una base de datos real, de modo que validan también el esquema de Flyway y las restricciones de la base de datos, no solo el código Java.
+La estrategia de pruebas (unitarias de las estrategias de votación, integración del backend con Testcontainers, pruebas de los frontends, comprobaciones manuales de extremo a extremo y carga con k6), el valor que aporta cada nivel, la trazabilidad con las reglas de negocio de la sección 2.7 y los resultados de carga se describen en `TESTING.md`.
 
 ---
 
@@ -686,7 +746,8 @@ Estos patrones no están escritos en el proyecto, pero la arquitectura se apoya 
 | **Interceptor** | `authInterceptor` (`core/auth.interceptor.ts`) | Añade la cabecera `Authorization` a todas las llamadas a `/api` y centraliza la reacción al 401. Ningún componente sabe que existe un token. |
 | **Observer** | Señales de Angular (`signal`, `computed`, `effect`) en todos los componentes; `Observable` de RxJS en `HttpClient` | La vista se recalcula cuando cambia el estado sin suscripciones manuales. `QrButtonComponent` usa un `effect` para redibujar el QR cuando se abre el diálogo o cambia el valor. |
 | **Builder** | `JwtClaimsSet.builder()` en `JwtService`; `new OpenAPI().info(...).components(...)`; `HttpSecurity` con lambdas | Construcción legible de objetos con muchos parámetros opcionales. |
-| **Proxy** | Proxies de Spring para `@Transactional`; nginx como proxy inverso de `/api/` | El código de servicio no gestiona transacciones. Los frontends no conocen la URL del backend. |
+| **Proxy** | Proxies de Spring para `@Transactional`; nginx como proxy inverso de `/api/`; Caddy como proxy inverso TLS delante de los nginx en producción | El código de servicio no gestiona transacciones. Los frontends no conocen la URL del backend. La terminación TLS y los certificados quedan fuera de las aplicaciones, que no cambian entre local y producción. |
+| **Pipeline** | Trabajos `test → build-push → deploy` de `.github/workflows/deploy.yml`, encadenados con `needs` | Cada etapa solo se ejecuta si la anterior termina bien; una versión que no pasa los tests nunca llega a publicarse ni a desplegarse. |
 | **Singleton gestionado** | Beans de Spring; `@Injectable({ providedIn: 'root' })` en `AuthService`, `ApiService`, `ToastService`, `ConfirmService`, `VoterTokenService` | Una única instancia por aplicación, pero creada y gestionada por el contenedor, sin `getInstance()` estático. |
 | **Front Controller** | `DispatcherServlet` de Spring MVC; `Router` de Angular | Un único punto de entrada que despacha a controladores o componentes. |
 | **Unit of Work** | `EntityManager` de JPA dentro de cada `@Transactional` | Los cambios en varias entidades (por ejemplo `VotingService.update`, que modifica la votación y su lista de items) se confirman o deshacen juntos. |

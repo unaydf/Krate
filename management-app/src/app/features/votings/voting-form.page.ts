@@ -163,7 +163,7 @@ import { PageHeaderComponent } from '../../shared/page-header.component';
             </ul>
             @if (selected().length > 0) {
               <div>
-                <span class="label">Orden en la papeleta</span>
+                <span class="label">Orden de los items</span>
                 <ol class="order">
                   @for (id of selected(); track id; let i = $index, first = $first, last = $last) {
                     <li>

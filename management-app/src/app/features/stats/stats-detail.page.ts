@@ -55,7 +55,7 @@ const REFRESH_MS = 5000;
           }
         </div>
         <div class="card card-body">
-          <span class="muted small">Papeletas</span
+          <span class="muted small">Participaciones</span
           ><strong class="big">{{ d.instance.totalVotes }}</strong>
         </div>
       </div>
@@ -97,7 +97,7 @@ const REFRESH_MS = 5000;
                       {{ r.averageRank !== null ? (r.averageRank | number: '1.0-2') : '—' }} ·
                       {{ r.firstPlaces }}
                       {{ r.firstPlaces === 1 ? 'primer puesto' : 'primeros puestos' }} · en
-                      {{ r.votes }} {{ r.votes === 1 ? 'papeleta' : 'papeletas' }}
+                      {{ r.votes }} {{ r.votes === 1 ? 'participación' : 'participaciones' }}
                     </span>
                   }
                 </span>

@@ -2,7 +2,7 @@
 
 Este documento recoge los lenguajes, frameworks, librerías y herramientas que forman el proyecto. Para cada una se indica qué es, para qué se usa en Krate, qué alternativas destacadas existen y por qué se ha elegido.
 
-La pila base (Angular, Java 21 con Spring Boot, PostgreSQL y Docker) venía fijada por los requisitos del proyecto. El resto de decisiones se han tomado dentro de ese marco, con dos criterios constantes: **no añadir dependencias sin una necesidad concreta** y **que todo funcione sin servicios externos**, ya que la voting app puede operar en redes sin salida a internet.
+La pila base (Angular, Java 21 con Spring Boot, PostgreSQL y Docker) venía fijada por los requisitos del proyecto. El resto de decisiones se han tomado dentro de ese marco, con dos criterios constantes: **no añadir dependencias sin una necesidad concreta** y **que todo funcione sin servicios externos**, ya que la voting app puede operar en redes sin salida a internet. El despliegue público (servidor, HTTPS y despliegue continuo) sigue el mismo criterio: servicios gratuitos o de coste por horas, sin modificar la pila que se ejecuta en local.
 
 ## Índice
 
@@ -214,7 +214,7 @@ La pila base (Angular, Java 21 con Spring Boot, PostgreSQL y Docker) venía fija
 
 **Qué es.** Herramienta para definir y ejecutar aplicaciones de varios contenedores con un fichero YAML.
 
-**En Krate.** `docker-compose.yml` en la raíz orquesta los cuatro servicios, la red interna, los volúmenes `pgdata` y `uploads`, el orden de arranque (el backend espera a que PostgreSQL esté sano) y las variables de entorno leídas de `.env`. En desarrollo, Spring Boot usa `Krate/compose.yaml` para levantar solo PostgreSQL.
+**En Krate.** `docker-compose.yml` en la raíz orquesta los cuatro servicios, la red interna, los volúmenes `pgdata` y `uploads`, el orden de arranque (el backend espera a que PostgreSQL esté sano) y las variables de entorno leídas de `.env`. En producción se combina con el override `docker-compose.prod.yml` (`docker compose -f docker-compose.yml -f docker-compose.prod.yml`), que sustituye `build` por las imágenes de GHCR con `pull_policy: always`, retira los puertos publicados (`ports: !reset []`), fuerza `APP_SEED_ENABLED=false`, deriva `APP_PUBLIC_VOTING_URL` y `APP_CORS_ORIGINS` de `VOTING_HOST` y `PANEL_HOST`, y añade el servicio `caddy` con sus volúmenes `caddy_data` y `caddy_config`. En desarrollo, Spring Boot usa `Krate/compose.yaml` para levantar solo PostgreSQL.
 
 **Alternativas.** Kubernetes (orquestación a gran escala), Docker Swarm, scripts manuales.
 
@@ -228,7 +228,77 @@ La pila base (Angular, Java 21 con Spring Boot, PostgreSQL y Docker) venía fija
 
 **Alternativas.** Apache HTTP Server, Caddy (HTTPS automático), servir los estáticos desde el propio Spring Boot.
 
-**Por qué.** Ligero, estándar en imágenes Docker y con una configuración de pocas líneas. Servir los frontends desde Spring Boot habría acoplado los despliegues y obligado a una sola aplicación. Caddy sería una buena opción si se añade HTTPS automático más adelante.
+**Por qué.** Ligero, estándar en imágenes Docker y con una configuración de pocas líneas. Servir los frontends desde Spring Boot habría acoplado los despliegues y obligado a una sola aplicación. En producción Caddy no lo sustituye, sino que se coloca delante: nginx sigue encargándose de los estáticos y del proxy a la API, y las imágenes de los frontends son idénticas en local y en el servidor.
+
+### Caddy 2
+
+**Qué es.** Servidor web y proxy inverso escrito en Go que obtiene y renueva certificados TLS de forma automática mediante el protocolo ACME (Let's Encrypt).
+
+**En Krate.** Único contenedor expuesto a internet en producción (puertos 80 y 443). `deploy/Caddyfile` tiene dos bloques de una línea: `{$VOTING_HOST} { reverse_proxy voting:80 }` y `{$PANEL_HOST} { reverse_proxy management:80 }`. Con eso Caddy emite un certificado por subdominio, lo renueva antes de caducar, redirige HTTP a HTTPS y reenvía el tráfico a los nginx. Los certificados se guardan en el volumen `caddy_data`.
+
+**Alternativas.** Traefik (orientado a contenedores, más configuración), nginx con certbot (renovación por `cron` y recarga manual), Cloudflare Tunnel (depende de un tercero y de una cuenta), certificados comprados.
+
+**Por qué.** HTTPS sin ninguna gestión manual de certificados, con una configuración de cuatro líneas. HTTPS es imprescindible en producción: `crypto.randomUUID` (identificador anónimo del votante) y `navigator.clipboard` (copiar el enlace de un punto) solo existen en contextos seguros, y los navegadores móviles marcan como inseguras las páginas HTTP. Al ser un contenedor más de la pila, no hay que instalar nada en el sistema operativo del servidor.
+
+### GitHub Actions
+
+**Qué es.** Servicio de integración y despliegue continuos integrado en GitHub: ejecuta workflows definidos en YAML en máquinas virtuales efímeras cuando ocurre un evento del repositorio.
+
+**En Krate.** `.github/workflows/deploy.yml` se dispara con cada `push` a `main` (y manualmente) y encadena tres trabajos: `test` (Java 21 y `./mvnw -B verify`, Node 22 y `ng build` más `ng test` en los dos frontends), `build-push` (construye las tres imágenes con `docker/build-push-action`, caché de capas de Actions, y las publica en GHCR) y `deploy` (entra por SSH en el VPS con `appleboy/ssh-action` y ejecuta `git pull`, `compose pull` y `compose up -d`). Las credenciales del servidor están en los *secrets* del repositorio.
+
+**Alternativas.** GitLab CI, Jenkins (servidor propio), Drone, despliegue manual por SSH o con un script `rsync`.
+
+**Por qué.** Está integrado con el repositorio y es gratuito para el volumen de un proyecto de este tamaño. Los *runners* traen Docker, así que los tests de integración con Testcontainers se ejecutan igual que en la máquina de desarrollo. Concentrar en el workflow los tests, la construcción y el despliegue garantiza que en el servidor solo llega código que ha pasado todas las pruebas.
+
+### GitHub Container Registry (GHCR)
+
+**Qué es.** Registro de imágenes de contenedor de GitHub (`ghcr.io`), asociado a la cuenta o la organización propietaria del repositorio.
+
+**En Krate.** Aloja `krate-backend`, `krate-management` y `krate-voting`, cada una etiquetada `latest` y `sha-<commit>`. El workflow las publica con el `GITHUB_TOKEN` del propio job; el VPS las descarga con `docker compose pull` (si el repositorio es privado, tras un único `docker login ghcr.io` con un token de solo lectura). `IMAGE_TAG` en el `.env` del servidor permite fijar o retroceder a una versión concreta.
+
+**Alternativas.** Docker Hub (límites de descarga en el plan gratuito), registro propio (`registry:2`), construir las imágenes en el propio servidor.
+
+**Por qué.** Misma autenticación y permisos que el repositorio, sin cuentas adicionales. Construir en el servidor habría obligado a instalar Maven y Node en el VPS y a dimensionarlo para compilar (el build de Angular y de Maven consume más memoria que la aplicación en ejecución); con el registro, el servidor solo ejecuta.
+
+### DuckDNS
+
+**Qué es.** Servicio gratuito de DNS dinámico que ofrece subdominios bajo `duckdns.org` apuntando a la IP que se indique.
+
+**En Krate.** Dos subdominios: `<VOTING_HOST>` (voting app, es el que aparece en los enlaces y QR de los puntos de votación) y `<PANEL_HOST>` (panel de gestión). Ambos apuntan a la IP pública del VPS y son los nombres de sitio que Caddy usa para pedir certificados.
+
+**Alternativas.** Dominio propio (coste anual y registro), `nip.io` o `sslip.io` (nombres derivados de la IP, poco legibles en un QR), Freenom (discontinuado en la práctica).
+
+**Por qué.** Gratuito, inmediato y sin registrar un dominio para un despliegue de pocas semanas. Let's Encrypt emite certificados para subdominios de `duckdns.org` sin problema, y dos nombres distintos permiten separar limpiamente el origen público del privado.
+
+### Hetzner Cloud (VPS)
+
+**Qué es.** Proveedor europeo de servidores virtuales con facturación por horas.
+
+**En Krate.** Un servidor CX22 (2 vCPU, 4 GB de RAM, 40 GB de disco) con Ubuntu 24.04 en un centro de datos de la Unión Europea. Ejecuta la pila completa de Docker Compose y se elimina al terminar el periodo de uso; el cortafuegos del proveedor solo admite 22, 80 y 443, igual que `ufw` dentro de la máquina.
+
+**Alternativas.** Oracle Cloud Free Tier (gratuito pero con disponibilidad irregular y arquitectura ARM), plataformas gestionadas como Railway, Render o Fly.io (coste por servicio, límites en el plan gratuito, sin control del host), una Raspberry Pi o un PC en casa (depende de la conexión doméstica y de abrir puertos).
+
+**Por qué.** Coste bajo y proporcional al tiempo que el servidor está encendido, sin límite de usuarios ni de tráfico relevante para este proyecto, y control total del sistema para instalar Docker y ejecutar la misma pila que en local. Un VPS convencional evita adaptar el despliegue a las particularidades de una plataforma gestionada.
+
+### Ubuntu Server 24.04, ufw y fail2ban
+
+**Qué es.** Distribución Linux con soporte a largo plazo (LTS); `ufw` es el cortafuegos sencillo de Ubuntu sobre `nftables` y `fail2ban` bloquea temporalmente las IP que acumulan intentos fallidos de acceso.
+
+**En Krate.** `deploy/install-server.sh` los configura en una sola ejecución como `root`: actualiza el sistema, instala Docker y Compose desde el repositorio oficial de Docker, crea el usuario `krate` en el grupo `docker`, abre solo 22, 80 y 443 en `ufw`, activa `fail2ban` para SSH, clona el repositorio en `/opt/krate`, genera el `.env` (con `APP_JWT_SECRET` y `POSTGRES_PASSWORD` aleatorios si no se indican) y crea el par de claves SSH que usa GitHub Actions. El script es idempotente: puede repetirse sin efectos secundarios.
+
+**Alternativas.** Debian (base de Ubuntu, ciclo de actualizaciones más lento), imágenes del proveedor con Docker preinstalado, endurecimiento manual.
+
+**Por qué.** LTS con cinco años de soporte, la distribución con más documentación para servidores y para la que Docker publica paquetes oficiales. Un script en lugar de pasos manuales hace que el servidor sea reproducible y deja constancia en el repositorio de exactamente qué hay instalado.
+
+### pg_dump y cron
+
+**Qué es.** `pg_dump` es la herramienta de copia lógica de PostgreSQL; `cron` es el planificador de tareas estándar de Linux.
+
+**En Krate.** `deploy/backup.sh`, instalado en `cron` por el script del servidor, ejecuta cada noche `pg_dump` dentro del contenedor `postgres` y copia el volumen `uploads` a `/opt/krate/backups/`, conservando los últimos 14 días. La restauración se hace con `psql` sobre un volumen recién creado, según se describe en `deploy/DESPLIEGUE.md`.
+
+**Alternativas.** Snapshots del servidor en Hetzner (de pago y de toda la máquina), pgBackRest o Barman (copias incrementales y punto en el tiempo), replicación a un segundo servidor.
+
+**Por qué.** El volumen de datos es pequeño y una copia lógica diaria cubre el riesgo real (un error de operación o la pérdida del servidor) con dos comandos estándar y sin dependencias nuevas.
 
 ---
 
@@ -263,6 +333,16 @@ La pila base (Angular, Java 21 con Spring Boot, PostgreSQL y Docker) venía fija
 **Alternativas.** Karma con Jasmine (la opción histórica de Angular, ya en desuso), Jest, Web Test Runner.
 
 **Por qué.** Es el ejecutor que Angular 22 configura por defecto y el reemplazo oficial de Karma. Arranca en menos de un segundo.
+
+### k6
+
+**Qué es.** Herramienta de pruebas de carga de Grafana Labs. Es un binario único escrito en Go que ejecuta guiones JavaScript: cada usuario virtual corre el guion en bucle y k6 recoge tiempos de respuesta, tasa de errores y peticiones por segundo. Permite declarar umbrales en el propio guion, de modo que la ejecución termina con error si no se cumplen.
+
+**En Krate.** `load/vote.js` carga los dos endpoints de la API pública, los únicos que reciben peticiones simultáneas: consulta del punto por código y envío de la papeleta. Un escenario simula votantes con tokens de dispositivo distintos y otro envía papeletas duplicadas en paralelo para comprobar que la restricción única de papeleta por votante responde con una sola 201 y una 409 bajo concurrencia real. Los umbrales fijados son p95 por debajo de 300 ms en la consulta y de 500 ms en el voto, menos del 1 % de respuestas 5xx y ningún duplicado aceptado. Al terminar, `handleSummary` genera un informe HTML autocontenido en `load/results/` (módulo `load/report.js`, sin dependencias externas). Se ejecuta a mano contra la pila Docker local (`load/README.md`); no forma parte de GitHub Actions porque en un *runner* compartido las cifras no son reproducibles.
+
+**Alternativas.** Apache JMeter, Gatling (Scala o Java), Locust (Python), Artillery (Node.js), `ab` y `wrk`.
+
+**Por qué.** Los guiones son JavaScript, el mismo lenguaje de los frontends, y se instala como un único binario sin JVM ni Python. Los umbrales declarativos convierten la prueba en verificable en lugar de en una simple medición. JMeter y Gatling son más pesados y orientados a interfaz gráfica o a Scala; `ab` y `wrk` no permiten simular el flujo consultar y votar con tokens distintos por usuario.
 
 ---
 
@@ -319,6 +399,11 @@ La pila base (Angular, Java 21 con Spring Boot, PostgreSQL y Docker) venía fija
 | @fontsource-variable/nunito | 5.3.0 | `package.json` de cada frontend |
 | qrcode | 1.5 | `management-app/package.json` |
 | Vitest | 4.1 | `package.json` de cada frontend |
+| k6 | 2.2 | instalado en la máquina de desarrollo; guion en `load/vote.js` |
 | Node.js | 22 (LTS) | Dockerfiles de los frontends |
 | nginx | 1.27 | Dockerfiles de los frontends |
-| Docker / Docker Compose | 29 / 5 | máquina de desarrollo |
+| Caddy | 2 (`caddy:2-alpine`) | `docker-compose.prod.yml`, `deploy/Caddyfile` |
+| Docker / Docker Compose | 29 / 5 | máquina de desarrollo y VPS |
+| Ubuntu Server | 24.04 LTS | VPS de producción (`deploy/install-server.sh`) |
+| Hetzner Cloud | CX22 (2 vCPU, 4 GB) | VPS de producción |
+| GitHub Actions | `actions/checkout@v4`, `actions/setup-java@v4`, `actions/setup-node@v4`, `docker/login-action@v3`, `docker/build-push-action@v6`, `appleboy/ssh-action@v1` | `.github/workflows/deploy.yml` |

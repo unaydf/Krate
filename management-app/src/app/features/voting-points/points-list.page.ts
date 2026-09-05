@@ -102,6 +102,26 @@ import { PageHeaderComponent } from '../../shared/page-header.component';
                 </td>
                 <td>
                   <div class="actions">
+                    @if (p.activeInstance) {
+                      <button
+                        type="button"
+                        class="btn btn-danger btn-sm"
+                        (click)="stop(p)"
+                        [disabled]="busy()"
+                      >
+                        <lucide-icon [img]="icons.stop" [size]="14" /> Detener
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn btn-primary btn-sm"
+                        (click)="launch(p)"
+                        [disabled]="!p.voting || busy()"
+                        [title]="p.voting ? '' : 'Asigna una votación al punto para poder lanzarla'"
+                      >
+                        <lucide-icon [img]="icons.play" [size]="14" /> Lanzar
+                      </button>
+                    }
                     <a [routerLink]="['/puntos', p.id]" class="btn btn-ghost btn-sm"
                       ><lucide-icon [img]="icons.edit" [size]="15" /> Editar</a
                     >
@@ -133,6 +153,7 @@ export class PointsListPage {
   readonly icons = ICONS;
   readonly loading = signal(true);
   readonly points = signal<VotingPoint[]>([]);
+  readonly busy = signal(false);
 
   constructor() {
     void this.load();
@@ -145,6 +166,41 @@ export class PointsListPage {
       this.toast.error(describeError(err).message);
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  async launch(p: VotingPoint): Promise<void> {
+    this.busy.set(true);
+    try {
+      const instance = await this.api.launch(p.id);
+      this.toast.success(`"${instance.votingName}" lanzada en ${instance.votingPointName}`);
+      await this.load();
+    } catch (err) {
+      this.toast.error(describeError(err).message);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async stop(p: VotingPoint): Promise<void> {
+    const instance = p.activeInstance;
+    if (!instance) return;
+    const ok = await this.confirm.ask({
+      title: 'Detener votación',
+      message: `Se detendrá "${instance.votingName}" en ${p.name}. El enlace mostrará la pantalla de votación desactivada.`,
+      confirmLabel: 'Detener',
+      danger: true,
+    });
+    if (!ok) return;
+    this.busy.set(true);
+    try {
+      await this.api.stop(instance.id);
+      this.toast.success('Votación detenida');
+      await this.load();
+    } catch (err) {
+      this.toast.error(describeError(err).message);
+    } finally {
+      this.busy.set(false);
     }
   }
 

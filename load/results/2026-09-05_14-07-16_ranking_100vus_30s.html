@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Krate · Prueba de carga · RANKING · 5 de septiembre de 2026, 14:07</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f4f3ef; color: #0b0b0b; font: 15px/1.5 "Inter", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  .page { max-width: 960px; margin: 0 auto; padding: 0 0 40px; }
+
+  .hero { background: #ffffff; border: 1px solid #e6e4dd; border-radius: 16px; margin: 24px 24px 0; padding: 26px 28px; box-shadow: inset 0 4px 0 #256abf; display: flex; justify-content: space-between; align-items: center; gap: 24px; box-shadow: 0 1px 2px rgba(11,11,11,0.03); }
+  .hero .eyebrow { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #256abf; font-weight: 700; margin-bottom: 6px; }
+  .hero h1 { font-size: 26px; margin: 0 0 6px; font-weight: 700; letter-spacing: -0.01em; }
+  .hero .sub { margin: 0; color: #52514e; font-size: 14px; }
+  .badge { display: inline-flex; align-items: center; gap: 10px; padding: 11px 18px; border-radius: 12px; font-weight: 700; font-size: 15px; white-space: nowrap; color: #fff; }
+  .badge.good { background: #0ca30c; }
+  .badge.critical { background: #d03b3b; }
+  .badge svg { width: 20px; height: 20px; }
+
+  .content { padding: 0 24px; }
+  .page { padding-top: 0; }
+  section { background: #ffffff; border: 1px solid #e6e4dd; border-radius: 16px; padding: 24px 28px; margin-top: 20px; box-shadow: 0 1px 2px rgba(11,11,11,0.03); }
+  h2 { font-size: 13px; letter-spacing: 0.10em; text-transform: uppercase; color: #898781; margin: 0 0 16px; font-weight: 700; }
+
+  .chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .chip { display: flex; gap: 12px; align-items: flex-start; background: #f4f3ef; border-radius: 12px; padding: 12px 14px; }
+  .chip svg { width: 20px; height: 20px; flex: none; color: #256abf; margin-top: 2px; }
+  .chip .k { font-size: 12px; color: #898781; }
+  .chip .v { font-weight: 600; overflow-wrap: anywhere; }
+  .chip .v small { color: #898781; font-weight: 400; white-space: nowrap; }
+  .tag { display: inline-block; background: #e4eefb; color: #256abf; border-radius: 999px; padding: 1px 10px; font-size: 13px; font-weight: 600; }
+
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .kpi { border: 1px solid #e6e4dd; border-left: 4px solid #e6e4dd; border-radius: 12px; padding: 14px 16px 12px; }
+  .kpi.good { border-left-color: #0ca30c; }
+  .kpi.critical { border-left-color: #d03b3b; }
+  .kpi.info { border-left-color: #256abf; }
+  .kpi .label { color: #52514e; font-size: 13px; }
+  .kpi .value { font-size: 30px; font-weight: 700; line-height: 1.1; margin-top: 6px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .kpi .unit { font-size: 15px; font-weight: 500; color: #52514e; margin-left: 4px; }
+  .kpi .note { color: #898781; font-size: 12px; margin-top: 6px; }
+
+  .thr { display: grid; grid-template-columns: 1fr 140px; gap: 6px 20px; align-items: center; padding: 14px 0; border-top: 1px solid #e6e4dd; }
+  .thr:first-of-type { border-top: 0; padding-top: 4px; }
+  .thr .name { font-weight: 600; }
+  .thr .name small { color: #898781; font-weight: 400; margin-left: 8px; }
+  .thr .meter { position: relative; height: 12px; background: #f4f3ef; border-radius: 6px; margin-top: 4px; }
+  .thr .meter .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: #256abf; }
+  .thr .meter .fill.nonzero { min-width: 6px; }
+  .thr .meter .fill.critical { background: #d03b3b; }
+  .thr .scale { display: flex; justify-content: space-between; font-size: 12px; color: #898781; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .thr .result { text-align: right; grid-row: span 2; }
+  .thr .result .val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; border-radius: 999px; padding: 3px 10px 3px 8px; white-space: nowrap; }
+  .status svg { width: 14px; height: 14px; }
+  .status.good { color: #006300; background: #e3f5e3; }
+  .status.critical { color: #d03b3b; background: #fbe5e5; }
+
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th { text-align: left; color: #898781; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; padding: 6px 8px 10px; border-bottom: 1px solid #e6e4dd; white-space: nowrap; }
+  td { padding: 12px 8px; border-bottom: 1px solid #e6e4dd; vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; }
+  td.p95 { font-weight: 700; }
+  .ep { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 13px; white-space: nowrap; }
+  .ep b { color: #256abf; font-weight: 700; margin-right: 6px; }
+  td.barcell { min-width: 210px; width: 210px; padding-right: 12px; }
+  th.barhead { white-space: nowrap; }
+  .bar { position: relative; height: 12px; background: #f4f3ef; border-radius: 6px; }
+  .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; background: #256abf; border-radius: 6px; }
+  .bar .fill.nonzero { min-width: 6px; }
+  .bar .limit { position: absolute; top: -4px; bottom: -4px; width: 2px; background: #52514e; margin-left: -1px; }
+  .barscale { display: flex; justify-content: space-between; font-size: 11px; color: #898781; margin-top: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .groups { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .group { border: 1px solid #e6e4dd; border-radius: 12px; overflow: hidden; }
+  .group header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #f4f3ef; }
+  .group header .t { font-weight: 700; }
+  .group header .t small { display: block; color: #898781; font-weight: 400; font-size: 12px; }
+  .group ul { list-style: none; margin: 0; padding: 4px 16px; }
+  .group li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid #e6e4dd; font-size: 14px; }
+  .group li:first-child { border-top: 0; }
+  .group li .n { color: #52514e; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13px; }
+  .group li .n b { color: #0b0b0b; }
+  .group li .n.bad b { color: #d03b3b; }
+  .group li svg { width: 16px; height: 16px; flex: none; }
+  .group li .ok { color: #0ca30c; }
+  .group li .ko { color: #d03b3b; }
+
+  code { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 13px; background: #f4f3ef; padding: 2px 6px; border-radius: 5px; white-space: nowrap; }
+  footer { color: #898781; font-size: 12px; text-align: center; margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="hero">
+	<div>
+		<div class="eyebrow">Krate · API pública</div>
+		<h1>Prueba de carga</h1>
+		<p class="sub">5 de septiembre de 2026, 14:07 · k6 · <code>load/vote.js</code></p>
+	</div>
+	<span class="badge good"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Umbrales superados</span>
+</div>
+
+<div class="content">
+
+<section>
+	<h2>Configuración</h2>
+	<div class="chips">
+		<div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg><div><div class="k">Punto de votación</div><div class="v">Máquina expendedora · Biblioteca <small>5xcy2x6q</small></div></div></div>
+		<div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 12 2 2 4-4"/><path d="M5 7c0-1.1.9-2 2-2h10a2 2 0 0 1 2 2v12H5V7Z"/><path d="M22 19H2"/></svg><div><div class="k">Votación</div><div class="v">Ranking de snacks</div></div></div>
+		<div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><div><div class="k">Tipo</div><div class="v"><span class="tag">Ranking</span> <small>6 items</small></div></div></div>
+		<div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><div><div class="k">Usuarios virtuales</div><div class="v">100 votantes <small>+ 10 duplicados</small></div></div></div>
+		<div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><div><div class="k">Duración</div><div class="v">30s <small>real 30,0 s</small></div></div></div>
+		<div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg><div><div class="k">Destino</div><div class="v">http://localhost:8080</div></div></div>
+	</div>
+</section>
+
+<section>
+	<h2>Resultados</h2>
+	<div class="kpis">
+		<div class="kpi info"><div class="label">Peticiones HTTP</div><div class="value">169.815</div><div class="note">5.653 por segundo</div></div>
+		<div class="kpi info"><div class="label">Papeletas registradas</div><div class="value">84.907</div><div class="note">respuestas 201 al enviar el voto</div></div>
+		<div class="kpi good"><div class="label">Duplicados aceptados</div><div class="value">0<span class="unit">de 12.474</span></div><div class="note">pares de envíos con el mismo token</div></div>
+		<div class="kpi good"><div class="label">Consulta del punto · p95</div><div class="value">35,8<span class="unit">ms</span></div><div class="note">GET /api/public/points/{code}</div></div>
+		<div class="kpi good"><div class="label">Envío de la papeleta · p95</div><div class="value">38,2<span class="unit">ms</span></div><div class="note">POST /api/public/points/{code}/votes</div></div>
+		<div class="kpi good"><div class="label">Errores inesperados</div><div class="value">0,00 %</div><div class="note">respuestas 5xx o sin respuesta</div></div>
+	</div>
+</section>
+
+<section>
+	<h2>Umbrales</h2>
+	<div class="thr">
+			<div>
+				<div class="name">Consulta del punto<small>GET · p95 · umbral p95 &lt; 300 ms</small></div>
+				<div class="meter"><div class="fill  nonzero" style="width:11.9%"></div></div>
+				<div class="scale"><span>0 ms</span><span>umbral 300 ms</span></div>
+			</div>
+			<div class="result"><div class="val">35,8 ms</div><span class="status good"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Superado</span></div>
+		</div><div class="thr">
+			<div>
+				<div class="name">Envío de la papeleta<small>POST · p95 · umbral p95 &lt; 500 ms</small></div>
+				<div class="meter"><div class="fill  nonzero" style="width:7.6%"></div></div>
+				<div class="scale"><span>0 ms</span><span>umbral 500 ms</span></div>
+			</div>
+			<div class="result"><div class="val">38,2 ms</div><span class="status good"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Superado</span></div>
+		</div><div class="thr">
+			<div>
+				<div class="name">Errores inesperados<small>respuestas 5xx o sin respuesta · umbral &lt; 1 %</small></div>
+				<div class="meter"><div class="fill " style="width:0.0%"></div></div>
+				<div class="scale"><span>0</span><span>umbral 1 %</span></div>
+			</div>
+			<div class="result"><div class="val">0,00 %</div><span class="status good"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Superado</span></div>
+		</div><div class="thr">
+			<div>
+				<div class="name">Duplicados aceptados<small>tokens con dos respuestas 201 · umbral ninguno</small></div>
+				<div class="meter"><div class="fill " style="width:0.0%"></div></div>
+				<div class="scale"><span>0</span><span>12.474 comprobados</span></div>
+			</div>
+			<div class="result"><div class="val">0 de 12.474</div><span class="status good"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Superado</span></div>
+		</div>
+</section>
+
+<section>
+	<h2>Tiempos de respuesta (ms)</h2>
+	<table>
+		<thead><tr><th>Endpoint</th><th class="num">mín</th><th class="num">media</th><th class="num">mediana</th><th class="num">p90</th><th class="num">p95</th><th class="num">p99</th><th class="num">máx</th><th class="barhead">p95 frente al umbral</th></tr></thead>
+		<tbody><tr><td><span class="ep"><b>GET</b>/api/public/points/{code}</span></td><td class="num">0,30</td><td class="num">19,4</td><td class="num">18,0</td><td class="num">31,4</td><td class="num p95">35,8</td><td class="num">64,7</td><td class="num">239</td><td class="barcell"><div class="bar"><div class="fill nonzero" style="width:10.6%"></div><div class="limit" style="left:89.3%"></div></div><div class="barscale"><span>0 ms</span><span>umbral 300 ms</span></div></td></tr><tr><td><span class="ep"><b>POST</b>/api/public/points/{code}/votes</span></td><td class="num">1,73</td><td class="num">21,7</td><td class="num">20,4</td><td class="num">33,7</td><td class="num p95">38,2</td><td class="num">68,0</td><td class="num">234</td><td class="barcell"><div class="bar"><div class="fill nonzero" style="width:6.8%"></div><div class="limit" style="left:89.3%"></div></div><div class="barscale"><span>0 ms</span><span>umbral 500 ms</span></div></td></tr></tbody>
+	</table>
+</section>
+
+<section>
+	<h2>Comprobaciones funcionales</h2>
+	<div class="groups"><div class="group">
+			<header><div class="t">Flujo de voto<small>consulta del punto y envío de una papeleta por dispositivo</small></div><span class="status good"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>434.598 correctas</span></header>
+			<ul><li><span><span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></span><span style="flex:1">La consulta responde 200</span><span class="n "><b>72.433</b></span></li><li><span><span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></span><span style="flex:1">El punto está activo</span><span class="n "><b>72.433</b></span></li><li><span><span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></span><span style="flex:1">El dispositivo aún no ha votado</span><span class="n "><b>72.433</b></span></li><li><span><span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></span><span style="flex:1">La papeleta se registra (201)</span><span class="n "><b>72.433</b></span></li><li><span><span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></span><span style="flex:1">La respuesta devuelve los items enviados</span><span class="n "><b>72.433</b></span></li><li><span><span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></span><span style="flex:1">La respuesta incluye la instancia</span><span class="n "><b>72.433</b></span></li></ul>
+		</div><div class="group">
+			<header><div class="t">Papeletas duplicadas<small>dos envíos simultáneos con el mismo token</small></div><span class="status good"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>24.948 correctas</span></header>
+			<ul><li><span><span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></span><span style="flex:1">Exactamente una papeleta aceptada (201)</span><span class="n "><b>12.474</b></span></li><li><span><span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></span><span style="flex:1">Exactamente una rechazada (409)</span><span class="n "><b>12.474</b></span></li></ul>
+		</div></div>
+</section>
+
+<footer>Generado por <code>CODE=5xcy2x6q k6 run load/vote.js</code></footer>
+</div>
+</div>
+</body>
+</html>

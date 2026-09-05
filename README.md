@@ -7,6 +7,7 @@ Aplicación web modular para crear, lanzar y gestionar votaciones en puntos de v
 | `Krate/` | Java 21 · Spring Boot 4.1 · PostgreSQL · Flyway | API REST (gestión + pública), autenticación JWT, imágenes |
 | `management-app/` | Angular 22 | Panel de gestión: cuenta, dashboard, votaciones, items, puntos, estadísticas |
 | `voting-app/` | Angular 22 | Interfaz pública de voto, pensada para móvil, sin registro |
+| `load/` | k6 | Prueba de carga de la API pública, ejecución manual |
 
 ## Conceptos
 
@@ -14,7 +15,7 @@ Aplicación web modular para crear, lanzar y gestionar votaciones en puntos de v
 - **Votación**: nombre, descripción y lista ordenada de items.
 - **Punto de votación**: lugar físico con un **enlace público fijo** (`/p/{código}`) y una votación asignada.
 - **Instancia**: un lanzamiento de la votación asignada en un punto. Solo puede haber una instancia activa por punto. Al detenerla, el enlace muestra "Votación desactivada".
-- **Papeleta**: la participación de un dispositivo (identificado con un token anónimo en el navegador) en una instancia. Solo se admite una papeleta por dispositivo e instancia. Lo que contiene depende del tipo de votación.
+- **Papeleta** (en la interfaz se muestra como "participación"): la participación de un dispositivo (identificado con un token anónimo en el navegador) en una instancia. Solo se admite una papeleta por dispositivo e instancia. Lo que contiene depende del tipo de votación.
 
 Tipos de votación (patrón Strategy en el backend, `voting/strategy`):
 
@@ -30,7 +31,7 @@ Reglas de negocio:
 - Mientras una votación está activa no se pueden borrar ni ella, ni sus items, ni el punto, ni cambiar la lista de items, el tipo de votación, el máximo de votos o la votación asignada al punto. Nombre y descripción sí.
 - El borrado es **lógico**: lo borrado desaparece de los listados y deja de poder usarse, pero las estadísticas históricas se conservan (los items borrados se marcan como tales).
 
-## Arranque con Docker (despliegue)
+## Arranque con Docker (local)
 
 ```bash
 cp .env.example .env
@@ -59,6 +60,30 @@ Con `APP_SEED_ENABLED=true` (en `.env` o en el entorno de `./mvnw spring-boot:ru
 
 Déjalo en `false` en cualquier entorno con datos reales.
 
+## Despliegue en servidor
+
+La aplicación está desplegada en un VPS (Hetzner CX22, Ubuntu 24.04) con HTTPS y despliegue continuo:
+
+| Servicio | URL pública |
+| --- | --- |
+| Voting app (enlaces y QR de los puntos) | `https://<VOTING_HOST>/p/{código}` |
+| Panel de gestión | `https://<PANEL_HOST>` |
+
+- **Dominios**: dos subdominios gratuitos de DuckDNS apuntando a la IP del servidor.
+- **HTTPS**: Caddy (`deploy/Caddyfile`) delante de los dos nginx, con certificados Let's Encrypt automáticos. Es el único contenedor expuesto; el resto solo es accesible en la red interna de Compose.
+- **Despliegue continuo**: cada `push` a `main` ejecuta `.github/workflows/deploy.yml`, que pasa los tests, publica las tres imágenes en GitHub Container Registry y entra por SSH al servidor para hacer `pull` y reiniciar lo que haya cambiado.
+- **Servidor**: preparado con `deploy/install-server.sh` (Docker, `ufw`, `fail2ban`, usuario de despliegue, `.env`); copias diarias con `deploy/backup.sh`.
+
+En el servidor la pila se gestiona con los dos ficheros de Compose:
+
+```bash
+cd /opt/krate
+docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+La guía paso a paso (crear el VPS, DuckDNS, secretos de GitHub, operación, restaurar copias y apagado final) está en `deploy/DESPLIEGUE.md`.
+
 > **Cambiar `POSTGRES_PASSWORD` después del primer arranque:** la imagen de PostgreSQL solo usa esa variable al inicializar el volumen. Si la cambias más tarde, el backend no podrá conectar (502 en los frontends). Sincroniza la contraseña sin perder datos con
 > `docker compose exec postgres psql -U krate -d krate -c "ALTER USER krate WITH PASSWORD 'nueva';"` y `docker compose restart backend`, o empieza de cero con `docker compose down -v && docker compose up -d`.
 
@@ -84,6 +109,12 @@ cd Krate && ./mvnw verify                    # tests de integración con Testcon
 cd management-app && npm run build && npx ng test --watch=false
 cd voting-app && npm run build && npx ng test --watch=false
 ```
+
+Estos mismos comandos los ejecuta GitHub Actions antes de cada despliegue; si alguno falla, no se publica ninguna imagen.
+
+La prueba de carga de la API pública (`CODE=<código> k6 run load/vote.js`, con la pila Docker levantada y una votación activa) se ejecuta a mano y no forma parte del workflow. Genera un informe HTML en `load/results/`. Detalles en `load/README.md`.
+
+Qué prueba cada nivel, cómo está construido y qué valor aporta se describe en `TESTING.md`.
 
 ## API (resumen)
 

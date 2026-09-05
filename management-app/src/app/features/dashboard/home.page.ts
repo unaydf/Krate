@@ -1,181 +1,222 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { ApiService } from '../../core/api.service';
-import { ConfirmService } from '../../core/confirm.service';
+import { AuthService } from '../../core/auth.service';
 import { describeError } from '../../core/errors';
-import { Instance, VotingPoint } from '../../core/models';
+import { Instance, InstanceStatsSummary, Item, Voting, VotingPoint } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
-import { CopyButtonComponent } from '../../shared/copy-button.component';
-import { QrButtonComponent } from '../../shared/qr-button.component';
-import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { ICONS } from '../../shared/icons';
 import { LoadingComponent } from '../../shared/loading.component';
 import { PageHeaderComponent } from '../../shared/page-header.component';
 
 @Component({
   selector: 'app-home-page',
-  imports: [
-    DatePipe,
-    FormsModule,
-    RouterLink,
-    LucideAngularModule,
-    PageHeaderComponent,
-    EmptyStateComponent,
-    CopyButtonComponent,
-    QrButtonComponent,
-    LoadingComponent,
-  ],
+  imports: [DatePipe, RouterLink, LucideAngularModule, PageHeaderComponent, LoadingComponent],
   template: `
-    <app-page-header title="Inicio" subtitle="Lanza y detén votaciones en tus puntos de votación" />
+    <app-page-header [title]="greeting()" subtitle="Resumen de tu plataforma de votaciones" />
 
     @if (loading()) {
       <app-loading />
     } @else {
-      <div class="grid layout">
+      <div class="tiles">
+        <a routerLink="/activas" class="tile primary">
+          <span class="tile-icon"><lucide-icon [img]="icons.live" [size]="26" /></span>
+          <span class="tile-num">{{ active().length }}</span>
+          <span class="tile-title">Votaciones activas</span>
+          <span class="tile-desc">Lanzar y detener votaciones en los puntos</span>
+        </a>
+        <a routerLink="/votaciones" class="tile">
+          <span class="tile-icon"><lucide-icon [img]="icons.voting" [size]="26" /></span>
+          <span class="tile-num">{{ votings().length }}</span>
+          <span class="tile-title">Votaciones</span>
+          <span class="tile-desc">Crear y editar votaciones y sus items</span>
+        </a>
+        <a routerLink="/items" class="tile">
+          <span class="tile-icon"><lucide-icon [img]="icons.item" [size]="26" /></span>
+          <span class="tile-num">{{ items().length }}</span>
+          <span class="tile-title">Items</span>
+          <span class="tile-desc">Opciones votables con imagen</span>
+        </a>
+        <a routerLink="/puntos" class="tile">
+          <span class="tile-icon"><lucide-icon [img]="icons.point" [size]="26" /></span>
+          <span class="tile-num">{{ points().length }}</span>
+          <span class="tile-title">Puntos de votación</span>
+          <span class="tile-desc">{{ withVoting() }} con votación asignada</span>
+        </a>
+        <a routerLink="/estadisticas" class="tile">
+          <span class="tile-icon"><lucide-icon [img]="icons.stats" [size]="26" /></span>
+          <span class="tile-num">{{ finished().length }}</span>
+          <span class="tile-title">Estadísticas</span>
+          <span class="tile-desc">{{ totalBallots() }} participaciones en total</span>
+        </a>
+      </div>
+
+      <div class="grid layout" style="margin-top: 1.25rem">
         <section class="card">
-          <div class="card-header"><h2>Lanzar votación</h2></div>
-          <div class="card-body">
-            @if (launchable().length === 0) {
-              <p class="muted">
-                No hay puntos disponibles para lanzar. Un punto debe tener una votación asignada y
-                no estar activo.
-                <a routerLink="/puntos">Gestionar puntos</a>
-              </p>
-            } @else {
-              <div class="field">
-                <label for="point">Punto de votación</label>
-                <select id="point" class="select" [(ngModel)]="selectedPointId">
-                  <option [ngValue]="null">Selecciona un punto…</option>
-                  @for (p of launchable(); track p.id) {
-                    <option [ngValue]="p.id">{{ p.name }} · {{ p.voting?.name }}</option>
-                  }
-                </select>
-              </div>
-              <button
-                type="button"
-                class="btn btn-primary"
-                [disabled]="selectedPointId === null || busy()"
-                (click)="launch()"
-              >
-                <lucide-icon [img]="icons.play" [size]="16" /> Lanzar votación
-              </button>
-            }
+          <div class="card-header">
+            <h2 class="row">
+              <lucide-icon [img]="icons.live" [size]="18" class="live" /> En marcha ahora
+            </h2>
+            <a routerLink="/activas" class="btn btn-ghost btn-sm">Gestionar</a>
           </div>
+          @if (active().length === 0) {
+            <div class="card-body muted">
+              No hay ninguna votación activa.
+              <a routerLink="/activas">Lanzar una votación</a>
+            </div>
+          } @else {
+            <ul class="list">
+              @for (i of active(); track i.id) {
+                <li>
+                  <div class="list-main">
+                    <strong>{{ i.votingName }}</strong>
+                    <span class="muted small"
+                      >{{ i.votingPointName }} · desde {{ i.startedAt | date: 'HH:mm' }}</span
+                    >
+                  </div>
+                  <span class="badge badge-success">{{ ballotsOf(i.id) }} participaciones</span>
+                  <a
+                    [routerLink]="['/estadisticas', i.id]"
+                    class="btn btn-ghost btn-sm"
+                    aria-label="Ver resultados"
+                  >
+                    <lucide-icon [img]="icons.stats" [size]="15" />
+                  </a>
+                </li>
+              }
+            </ul>
+          }
         </section>
 
         <section class="card">
           <div class="card-header">
-            <h2>Resumen</h2>
+            <h2 class="row"><lucide-icon [img]="icons.clock" [size]="18" /> Últimos resultados</h2>
+            <a routerLink="/estadisticas" class="btn btn-ghost btn-sm">Ver todos</a>
           </div>
-          <div class="card-body stats">
-            <div>
-              <span class="num">{{ active().length }}</span
-              ><span class="muted small">activas ahora</span>
-            </div>
-            <div>
-              <span class="num">{{ points().length }}</span
-              ><span class="muted small">puntos de votación</span>
-            </div>
-            <div>
-              <span class="num">{{ withVoting() }}</span
-              ><span class="muted small">con votación asignada</span>
-            </div>
-          </div>
+          @if (recentFinished().length === 0) {
+            <div class="card-body muted">Todavía no hay votaciones finalizadas.</div>
+          } @else {
+            <ul class="list">
+              @for (r of recentFinished(); track r.id) {
+                <li>
+                  <div class="list-main">
+                    <strong>{{ r.votingName }}</strong>
+                    <span class="muted small"
+                      >{{ r.votingPointName }} · {{ r.endedAt | date: 'd MMM, HH:mm' }}</span
+                    >
+                  </div>
+                  <span class="badge badge-neutral">{{ r.totalVotes }} participaciones</span>
+                  <a
+                    [routerLink]="['/estadisticas', r.id]"
+                    class="btn btn-ghost btn-sm"
+                    aria-label="Ver resultados"
+                  >
+                    <lucide-icon [img]="icons.stats" [size]="15" />
+                  </a>
+                </li>
+              }
+            </ul>
+          }
         </section>
       </div>
-
-      <section class="card" style="margin-top: 1rem">
-        <div class="card-header">
-          <h2 class="row">
-            <lucide-icon [img]="icons.live" [size]="18" class="live" /> Votaciones activas
-          </h2>
-          <span class="badge badge-success">{{ active().length }}</span>
-        </div>
-        @if (active().length === 0) {
-          <app-empty-state
-            title="No hay votaciones activas"
-            message="Lanza una votación desde el panel de arriba para que aparezca aquí."
-          />
-        } @else {
-          <div class="table-wrap">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>Punto</th>
-                  <th>Votación</th>
-                  <th>Inicio</th>
-                  <th>Enlace público</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (i of active(); track i.id) {
-                  <tr>
-                    <td>
-                      <strong>{{ i.votingPointName }}</strong>
-                    </td>
-                    <td>{{ i.votingName }}</td>
-                    <td class="muted">{{ i.startedAt | date: 'd MMM y, HH:mm' }}</td>
-                    <td>
-                      <div class="row">
-                        <a [href]="i.publicUrl" target="_blank" rel="noopener" class="mono small">{{
-                          i.publicUrl
-                        }}</a>
-                        <app-copy-button [value]="i.publicUrl" label="Copiar" />
-                        <app-qr-button
-                          [value]="i.publicUrl"
-                          [fileName]="'votacion-' + i.code"
-                          [title]="i.votingPointName"
-                          [subtitle]="i.votingName"
-                        />
-                      </div>
-                    </td>
-                    <td>
-                      <div class="actions">
-                        <button
-                          type="button"
-                          class="btn btn-danger btn-sm"
-                          (click)="stop(i)"
-                          [disabled]="busy()"
-                        >
-                          <lucide-icon [img]="icons.stop" [size]="14" /> Detener
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        }
-      </section>
     }
   `,
   styles: `
-    .layout {
-      grid-template-columns: 2fr 1fr;
-    }
-    .stats {
+    .tiles {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 1rem;
     }
-    .stats > div {
+    @media (min-width: 1180px) {
+      .tiles {
+        grid-template-columns: repeat(5, 1fr);
+      }
+    }
+    .tile {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      padding: 1.25rem;
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      color: var(--text);
+      text-decoration: none !important;
+      transition:
+        transform 0.12s,
+        border-color 0.12s;
+      min-height: 160px;
+    }
+    .tile:hover {
+      transform: translateY(-2px);
+      border-color: var(--primary);
+    }
+    .tile.primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+    .tile.primary .tile-icon {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+    .tile.primary .tile-desc {
+      color: rgba(255, 255, 255, 0.85);
+    }
+    .tile-icon {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--primary-soft);
+      color: var(--primary-text);
+      margin-bottom: 0.5rem;
+    }
+    .tile-num {
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+    .tile-title {
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+    .tile-desc {
+      font-size: 0.85rem;
+      color: var(--text-2);
+    }
+    .layout {
+      grid-template-columns: 1fr 1fr;
+    }
+    .live {
+      color: var(--primary);
+    }
+    .list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .list li {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.8rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .list li:last-child {
+      border-bottom: 0;
+    }
+    .list-main {
+      flex: 1;
+      min-width: 0;
       display: flex;
       flex-direction: column;
     }
-    .num {
-      font-size: 1.8rem;
-      font-weight: 700;
-      line-height: 1.1;
-    }
-    .live {
-      color: var(--success);
-    }
-    @media (max-width: 860px) {
+    @media (max-width: 960px) {
       .layout {
         grid-template-columns: 1fr;
       }
@@ -184,78 +225,52 @@ import { PageHeaderComponent } from '../../shared/page-header.component';
 })
 export class HomePage {
   private readonly api = inject(ApiService);
+  private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
-  private readonly confirm = inject(ConfirmService);
   readonly icons = ICONS;
 
   readonly loading = signal(true);
-  readonly busy = signal(false);
   readonly points = signal<VotingPoint[]>([]);
+  readonly votings = signal<Voting[]>([]);
+  readonly items = signal<Item[]>([]);
   readonly active = signal<Instance[]>([]);
-  selectedPointId: number | null = null;
+  readonly stats = signal<InstanceStatsSummary[]>([]);
 
-  readonly launchable = computed(() => this.points().filter((p) => p.voting && !p.activeInstance));
+  readonly greeting = computed(() => {
+    const name = this.auth.user()?.name?.split(' ')[0];
+    return name ? `Hola, ${name}` : 'Inicio';
+  });
   readonly withVoting = computed(() => this.points().filter((p) => p.voting).length);
+  readonly finished = computed(() => this.stats().filter((s) => s.status === 'CLOSED'));
+  readonly recentFinished = computed(() => this.finished().slice(0, 4));
+  readonly totalBallots = computed(() => this.stats().reduce((acc, s) => acc + s.totalVotes, 0));
 
   constructor() {
     void this.load();
   }
 
-  async load(): Promise<void> {
+  ballotsOf(instanceId: number): number {
+    return this.stats().find((s) => s.id === instanceId)?.totalVotes ?? 0;
+  }
+
+  private async load(): Promise<void> {
     try {
-      const [points, active] = await Promise.all([
+      const [points, votings, items, active, stats] = await Promise.all([
         this.api.listPoints(),
+        this.api.listVotings(),
+        this.api.listItems(),
         this.api.listInstances('ACTIVE'),
+        this.api.listStats(),
       ]);
       this.points.set(points);
+      this.votings.set(votings);
+      this.items.set(items);
       this.active.set(active);
-      if (
-        this.selectedPointId !== null &&
-        !this.launchable().some((p) => p.id === this.selectedPointId)
-      ) {
-        this.selectedPointId = null;
-      }
+      this.stats.set(stats);
     } catch (err) {
       this.toast.error(describeError(err).message);
     } finally {
       this.loading.set(false);
-    }
-  }
-
-  async launch(): Promise<void> {
-    if (this.selectedPointId === null) return;
-    this.busy.set(true);
-    try {
-      const instance = await this.api.launch(this.selectedPointId);
-      this.toast.success(
-        `Votación "${instance.votingName}" lanzada en ${instance.votingPointName}`,
-      );
-      this.selectedPointId = null;
-      await this.load();
-    } catch (err) {
-      this.toast.error(describeError(err).message);
-    } finally {
-      this.busy.set(false);
-    }
-  }
-
-  async stop(instance: Instance): Promise<void> {
-    const ok = await this.confirm.ask({
-      title: 'Detener votación',
-      message: `Se detendrá "${instance.votingName}" en ${instance.votingPointName}. El enlace mostrará la pantalla de votación desactivada.`,
-      confirmLabel: 'Detener',
-      danger: true,
-    });
-    if (!ok) return;
-    this.busy.set(true);
-    try {
-      await this.api.stop(instance.id);
-      this.toast.success('Votación detenida');
-      await this.load();
-    } catch (err) {
-      this.toast.error(describeError(err).message);
-    } finally {
-      this.busy.set(false);
     }
   }
 }

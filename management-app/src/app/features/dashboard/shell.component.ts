@@ -221,6 +221,7 @@ export class ShellComponent {
   readonly menuOpen = signal(false);
   readonly links = [
     { path: '/', label: 'Inicio', icon: ICONS.dashboard },
+    { path: '/activas', label: 'Votaciones activas', icon: ICONS.live },
     { path: '/votaciones', label: 'Votaciones', icon: ICONS.voting },
     { path: '/items', label: 'Items', icon: ICONS.item },
     { path: '/puntos', label: 'Puntos de votación', icon: ICONS.point },

@@ -23,6 +23,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/dashboard/home.page').then((m) => m.HomePage),
       },
       {
+        path: 'activas',
+        loadComponent: () =>
+          import('./features/active/active-votings.page').then((m) => m.ActiveVotingsPage),
+      },
+      {
         path: 'votaciones',
         loadComponent: () =>
           import('./features/votings/votings-list.page').then((m) => m.VotingsListPage),
