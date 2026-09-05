@@ -105,7 +105,7 @@ cd voting-app && npm install && npm start
 ## Verificación
 
 ```bash
-cd Krate && ./mvnw verify                    # tests de integración con Testcontainers (requiere Docker)
+cd Krate && ./mvnw verify                    # tests con Testcontainers (requiere Docker) + informe de cobertura en target/site/jacoco/
 cd management-app && npm run build && npx ng test --watch=false
 cd voting-app && npm run build && npx ng test --watch=false
 ```

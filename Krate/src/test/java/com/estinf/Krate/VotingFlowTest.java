@@ -214,4 +214,77 @@ class VotingFlowTest extends ApiTestSupport {
 				.header("Authorization", "Bearer " + token))
 			.andExpect(status().isBadRequest());
 	}
+
+	private String pointBody(String name, String description, Integer votingId) {
+		return "{\"name\":\"%s\",\"description\":\"%s\",\"votingId\":%s}".formatted(name, description, votingId);
+	}
+
+	@Test
+	void editPointAndVotingReassignmentBlockedWhileActive() throws Exception {
+		token = registerAndGetToken(uniqueEmail("edit-point"));
+		int pizza = createItem("Pizza");
+		int pasta = createItem("Pasta");
+		int cena = createVoting("Cena", pizza, pasta);
+		int postre = createVoting("Postre", pizza);
+		int pointId = read(createPoint("Entrada", cena), "$.id");
+
+		// Sin instancia: se edita todo, incluida la votacion asignada
+		mvc.perform(put("/api/voting-points/" + pointId).contentType(MediaType.APPLICATION_JSON)
+				.content(pointBody("Entrada principal", "Junto a la puerta", postre))
+				.header("Authorization", "Bearer " + token))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.name").value("Entrada principal"))
+			.andExpect(jsonPath("$.description").value("Junto a la puerta"))
+			.andExpect(jsonPath("$.voting.id").value(postre));
+
+		// Nombre en blanco -> 400
+		mvc.perform(put("/api/voting-points/" + pointId).contentType(MediaType.APPLICATION_JSON)
+				.content(pointBody("  ", "", postre)).header("Authorization", "Bearer " + token))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.errors.name").exists());
+
+		// Votacion de otro gestor -> 404
+		String other = registerAndGetToken(uniqueEmail("edit-point-other"));
+		String foreignVoting = mvc.perform(post("/api/votings").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\":\"Ajena\",\"itemIds\":[]}").header("Authorization", "Bearer " + other))
+			.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		int foreignId = read(foreignVoting, "$.id");
+		mvc.perform(put("/api/voting-points/" + pointId).contentType(MediaType.APPLICATION_JSON)
+				.content(pointBody("Entrada principal", "", foreignId)).header("Authorization", "Bearer " + token))
+			.andExpect(status().isNotFound());
+
+		// Lanzar
+		mvc.perform(post("/api/instances").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"votingPointId\":" + pointId + "}").header("Authorization", "Bearer " + token))
+			.andExpect(status().isCreated());
+
+		// Con instancia activa: cambiar o quitar la votacion asignada -> 409
+		mvc.perform(put("/api/voting-points/" + pointId).contentType(MediaType.APPLICATION_JSON)
+				.content(pointBody("Entrada principal", "", cena)).header("Authorization", "Bearer " + token))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.detail").value(Matchers.containsString("instancia activa")));
+		mvc.perform(put("/api/voting-points/" + pointId).contentType(MediaType.APPLICATION_JSON)
+				.content(pointBody("Entrada principal", "", null)).header("Authorization", "Bearer " + token))
+			.andExpect(status().isConflict());
+
+		// Pero nombre y descripcion si se pueden editar manteniendo la votacion
+		mvc.perform(put("/api/voting-points/" + pointId).contentType(MediaType.APPLICATION_JSON)
+				.content(pointBody("Entrada norte", "Planta baja", postre)).header("Authorization", "Bearer " + token))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.name").value("Entrada norte"))
+			.andExpect(jsonPath("$.description").value("Planta baja"))
+			.andExpect(jsonPath("$.voting.id").value(postre))
+			.andExpect(jsonPath("$.activeInstance.status").value("ACTIVE"));
+
+		// Tras detener, la votacion vuelve a poder cambiarse
+		int instanceId = read(mvc.perform(get("/api/voting-points/" + pointId).header("Authorization", "Bearer " + token))
+			.andReturn().getResponse().getContentAsString(), "$.activeInstance.id");
+		mvc.perform(post("/api/instances/" + instanceId + "/stop").header("Authorization", "Bearer " + token))
+			.andExpect(status().isOk());
+		mvc.perform(put("/api/voting-points/" + pointId).contentType(MediaType.APPLICATION_JSON)
+				.content(pointBody("Entrada norte", "Planta baja", cena)).header("Authorization", "Bearer " + token))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.voting.id").value(cena))
+			.andExpect(jsonPath("$.activeInstance").doesNotExist());
+	}
 }

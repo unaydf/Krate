@@ -324,6 +324,16 @@ La pila base (Angular, Java 21 con Spring Boot, PostgreSQL y Docker) venía fija
 
 **Por qué.** H2 no soporta los índices únicos parciales ni se comporta igual que PostgreSQL; probar contra el motor real evita sorpresas en despliegue. Requiere Docker en la máquina de desarrollo, que ya es un requisito del proyecto.
 
+### JaCoCo
+
+**Qué es.** Herramienta de cobertura de código para Java. Un agente de la JVM instrumenta las clases al cargarlas y registra qué instrucciones, ramas, líneas y métodos se ejecutan durante los tests; después genera un informe navegable.
+
+**En Krate.** `jacoco-maven-plugin` en `Krate/pom.xml`, con `prepare-agent` antes de los tests y `report` en la fase `verify`. El informe queda en `Krate/target/site/jacoco/` (HTML, XML y CSV). Se excluyen el punto de entrada, los DTOs y las propiedades de configuración. No hay umbral mínimo. Las cifras y su lectura están en `TESTING.md`.
+
+**Alternativas.** Cobertura (sin mantenimiento desde hace años), OpenClover, la cobertura integrada de IntelliJ IDEA (solo en el IDE).
+
+**Por qué.** Es el estándar de facto en proyectos Maven y Gradle, funciona con Java 21 y se integra sin más configuración con Surefire. Al ir en el propio `verify`, el informe se genera también en el trabajo `test` de GitHub Actions. La versión se fija a mano porque el BOM de Spring Boot no la gestiona.
+
 ### Vitest
 
 **Qué es.** Ejecutor de tests para JavaScript y TypeScript, rápido y compatible con la API de Jest.
@@ -392,6 +402,7 @@ La pila base (Angular, Java 21 con Spring Boot, PostgreSQL y Docker) venía fija
 | springdoc-openapi | 3.1.0 | `Krate/pom.xml` |
 | PostgreSQL | 17 | `docker-compose.yml`, `Krate/compose.yaml`, Testcontainers |
 | Testcontainers | 2.0.5 | gestionada por Spring Boot |
+| JaCoCo | 0.8.15 | `Krate/pom.xml` (propiedad `jacoco.version`) |
 | TypeScript | 6.0 | `package.json` de cada frontend |
 | Angular | 22.1.5 | `package.json` de cada frontend |
 | RxJS | 7.8 | `package.json` de cada frontend |
