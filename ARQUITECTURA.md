@@ -69,7 +69,7 @@ flowchart LR
 El sistema se ejecuta como una pila de contenedores Docker definida en `docker-compose.yml`, en la raíz del repositorio. La misma pila sirve para dos entornos:
 
 - **Local**: `docker compose up --build -d` construye las tres imágenes propias y publica los puertos 8081, 8082 y 8080 en el host.
-- **Producción**: un VPS (Hetzner CX22, Ubuntu 24.04) ejecuta la pila con el override `docker-compose.prod.yml`, que sustituye `build` por imágenes publicadas en GitHub Container Registry (GHCR), retira la publicación de puertos de los cuatro servicios y añade un quinto contenedor, `caddy`, que es el único alcanzable desde internet y termina TLS para los dos subdominios públicos `<VOTING_HOST>` (voting app, el que va en los QR) y `<PANEL_HOST>` (panel).
+- **Producción**: un VPS (Hetzner CX12, 2 GB de RAM, Ubuntu 24.04) ejecuta la pila con el override `docker-compose.prod.yml`, que sustituye `build` por imágenes publicadas en GitHub Container Registry (GHCR), retira la publicación de puertos de los cuatro servicios, limita el montón de la máquina virtual de Java al 50 % de la memoria del servidor y añade un quinto contenedor, `caddy`, que es el único alcanzable desde internet y termina TLS para los dos subdominios públicos `<VOTING_HOST>` (voting app, el que va en los QR) y `<PANEL_HOST>` (panel).
 
 Todos los contenedores comparten la red interna que crea Compose.
 
@@ -691,7 +691,7 @@ Entornos:
 
 - **Desarrollo.** `./mvnw spring-boot:run` levanta PostgreSQL con `Krate/compose.yaml`; `npm start` en cada frontend sirve en 4200 y 4300 con proxy a 8080.
 - **Docker local.** `docker compose up --build -d` con un `.env` en la raíz (plantilla en `.env.example`). Las imágenes se construyen en dos etapas (Maven o Node para compilar; JRE o nginx para ejecutar) y el backend corre con un usuario sin privilegios. Sin HTTPS: panel en `http://localhost:8081` y voting app en `http://localhost:8082`.
-- **Producción.** VPS Hetzner CX22 con Ubuntu 24.04, preparado por `deploy/install-server.sh`, con el repositorio clonado en `/opt/krate` y el `.env` generado durante la instalación. La pila se arranca con `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`: imágenes descargadas de GHCR, Caddy con HTTPS delante de los nginx, ningún puerto interno publicado y `APP_SEED_ENABLED=false` forzado. Los despliegues los ejecuta GitHub Actions en cada `push` a `main` (sección 1.2). Una tarea `cron` lanza `deploy/backup.sh` cada noche: `pg_dump` de la base de datos y copia del volumen `uploads` en `/opt/krate/backups/`, conservando 14 días. La operación diaria (logs, reinicios, restaurar una copia, rotar `APP_JWT_SECRET`, apagado final) está documentada en `deploy/DESPLIEGUE.md`.
+- **Producción.** VPS Hetzner CX12 (2 GB de RAM) con Ubuntu 24.04, preparado por `deploy/install-server.sh`, con el repositorio clonado en `/opt/krate` y el `.env` generado durante la instalación. La pila se arranca con `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`: imágenes descargadas de GHCR, Caddy con HTTPS delante de los nginx, ningún puerto interno publicado y `APP_SEED_ENABLED=false` forzado. Los despliegues los ejecuta GitHub Actions en cada `push` a `main` (sección 1.2). Una tarea `cron` lanza `deploy/backup.sh` cada noche: `pg_dump` de la base de datos y copia del volumen `uploads` en `/opt/krate/backups/`, conservando 14 días. La operación diaria (logs, reinicios, restaurar una copia, rotar `APP_JWT_SECRET`, apagado final) está documentada en `deploy/DESPLIEGUE.md`.
 
 ### 2.9 Estrategia de pruebas
 

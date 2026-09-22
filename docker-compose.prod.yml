@@ -1,0 +1,54 @@
+# Override de produccion. Se usa junto al compose base:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Sustituye la construccion local por las imagenes publicadas en GHCR, retira la
+# publicacion de puertos (solo Caddy queda accesible desde internet) y añade el
+# proxy inverso con HTTPS automatico.
+services:
+  postgres:
+    ports: !reset []
+
+  backend:
+    build: !reset null
+    image: ghcr.io/${GHCR_OWNER}/krate-backend:${IMAGE_TAG:-latest}
+    pull_policy: always
+    ports: !reset []
+    environment:
+      APP_SEED_ENABLED: "false"
+      APP_PUBLIC_VOTING_URL: https://${VOTING_HOST}
+      APP_CORS_ORIGINS: https://${PANEL_HOST},https://${VOTING_HOST}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=50.0
+
+  management:
+    build: !reset null
+    image: ghcr.io/${GHCR_OWNER}/krate-management:${IMAGE_TAG:-latest}
+    pull_policy: always
+    ports: !reset []
+
+  voting:
+    build: !reset null
+    image: ghcr.io/${GHCR_OWNER}/krate-voting:${IMAGE_TAG:-latest}
+    pull_policy: always
+    ports: !reset []
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      VOTING_HOST: ${VOTING_HOST}
+      PANEL_HOST: ${PANEL_HOST}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - management
+      - voting
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

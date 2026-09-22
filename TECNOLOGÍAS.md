@@ -274,7 +274,7 @@ La pila base (Angular, Java 21 con Spring Boot, PostgreSQL y Docker) venía fija
 
 **Qué es.** Proveedor europeo de servidores virtuales con facturación por horas.
 
-**En Krate.** Un servidor CX22 (2 vCPU, 4 GB de RAM, 40 GB de disco) con Ubuntu 24.04 en un centro de datos de la Unión Europea. Ejecuta la pila completa de Docker Compose y se elimina al terminar el periodo de uso; el cortafuegos del proveedor solo admite 22, 80 y 443, igual que `ufw` dentro de la máquina.
+**En Krate.** Un servidor CX12 (2 GB de RAM, 40 GB de disco) con Ubuntu 24.04 en un centro de datos de la Unión Europea. Ejecuta la pila completa de Docker Compose y se elimina al terminar el periodo de uso; el cortafuegos del proveedor solo admite 22, 80 y 443, igual que `ufw` dentro de la máquina.
 
 **Alternativas.** Oracle Cloud Free Tier (gratuito pero con disponibilidad irregular y arquitectura ARM), plataformas gestionadas como Railway, Render o Fly.io (coste por servicio, límites en el plan gratuito, sin control del host), una Raspberry Pi o un PC en casa (depende de la conexión doméstica y de abrir puertos).
 
@@ -284,7 +284,7 @@ La pila base (Angular, Java 21 con Spring Boot, PostgreSQL y Docker) venía fija
 
 **Qué es.** Distribución Linux con soporte a largo plazo (LTS); `ufw` es el cortafuegos sencillo de Ubuntu sobre `nftables` y `fail2ban` bloquea temporalmente las IP que acumulan intentos fallidos de acceso.
 
-**En Krate.** `deploy/install-server.sh` los configura en una sola ejecución como `root`: actualiza el sistema, instala Docker y Compose desde el repositorio oficial de Docker, crea el usuario `krate` en el grupo `docker`, abre solo 22, 80 y 443 en `ufw`, activa `fail2ban` para SSH, clona el repositorio en `/opt/krate`, genera el `.env` (con `APP_JWT_SECRET` y `POSTGRES_PASSWORD` aleatorios si no se indican) y crea el par de claves SSH que usa GitHub Actions. El script es idempotente: puede repetirse sin efectos secundarios.
+**En Krate.** `deploy/install-server.sh` los configura en una sola ejecución como `root`: actualiza el sistema, instala Docker y Compose desde el repositorio oficial de Docker, crea el usuario `krate` en el grupo `docker`, abre solo 22, 80 y 443 en `ufw`, activa `fail2ban` para SSH, crea un fichero de intercambio de 2 GB, clona el repositorio en `/opt/krate`, genera el `.env` (con `APP_JWT_SECRET` y `POSTGRES_PASSWORD` aleatorios si no se indican) y crea el par de claves SSH que usa GitHub Actions. El script es idempotente: puede repetirse sin efectos secundarios.
 
 **Alternativas.** Debian (base de Ubuntu, ciclo de actualizaciones más lento), imágenes del proveedor con Docker preinstalado, endurecimiento manual.
 
@@ -416,5 +416,5 @@ La pila base (Angular, Java 21 con Spring Boot, PostgreSQL y Docker) venía fija
 | Caddy | 2 (`caddy:2-alpine`) | `docker-compose.prod.yml`, `deploy/Caddyfile` |
 | Docker / Docker Compose | 29 / 5 | máquina de desarrollo y VPS |
 | Ubuntu Server | 24.04 LTS | VPS de producción (`deploy/install-server.sh`) |
-| Hetzner Cloud | CX22 (2 vCPU, 4 GB) | VPS de producción |
-| GitHub Actions | `actions/checkout@v4`, `actions/setup-java@v4`, `actions/setup-node@v4`, `docker/login-action@v3`, `docker/build-push-action@v6`, `appleboy/ssh-action@v1` | `.github/workflows/deploy.yml` |
+| Hetzner Cloud | CX12 (2 GB) | VPS de producción |
+| GitHub Actions | `actions/checkout@v4`, `actions/setup-java@v4`, `actions/setup-node@v4`, `docker/setup-buildx-action@v3`, `docker/login-action@v3`, `docker/build-push-action@v6`, `appleboy/ssh-action@v1` | `.github/workflows/deploy.yml` |

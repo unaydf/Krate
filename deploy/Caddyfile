@@ -1,0 +1,11 @@
+# Un bloque por subdominio. Caddy pide y renueva los certificados de Let's Encrypt,
+# redirige HTTP a HTTPS y reenvia el trafico al nginx correspondiente.
+# Con nombres *.localhost emite certificados internos, lo que permite probar la
+# pila de produccion en local sin tocar Let's Encrypt.
+{$VOTING_HOST} {
+	reverse_proxy voting:80
+}
+
+{$PANEL_HOST} {
+	reverse_proxy management:80
+}

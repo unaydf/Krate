@@ -63,7 +63,7 @@ Déjalo en `false` en cualquier entorno con datos reales.
 
 ## Despliegue en servidor
 
-La aplicación está desplegada en un VPS (Hetzner CX22, Ubuntu 24.04) con HTTPS y despliegue continuo:
+La aplicación está desplegada en un VPS (Hetzner CX12, Ubuntu 24.04) con HTTPS y despliegue continuo:
 
 | Servicio | URL pública |
 | --- | --- |
