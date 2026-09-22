@@ -55,6 +55,12 @@ import { PageHeaderComponent } from '../../shared/page-header.component';
               <h3 class="truncate">{{ item.name }}</h3>
               <p class="muted small clamp">{{ item.description || 'Sin descripción' }}</p>
               <div class="actions">
+                <a
+                  [routerLink]="['/estadisticas/items', item.id]"
+                  class="btn btn-ghost btn-sm history"
+                  title="Rendimiento en todas las votaciones"
+                  ><lucide-icon [img]="icons.history" [size]="15" /> Historial</a
+                >
                 <a [routerLink]="['/items', item.id]" class="btn btn-ghost btn-sm"
                   ><lucide-icon [img]="icons.edit" [size]="15" /> Editar</a
                 >
@@ -100,8 +106,12 @@ import { PageHeaderComponent } from '../../shared/page-header.component';
     }
     .actions {
       display: flex;
+      flex-wrap: wrap;
       gap: 0.25rem;
       justify-content: flex-end;
+    }
+    .actions .history {
+      margin-right: auto;
     }
   `,
 })

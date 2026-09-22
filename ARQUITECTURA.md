@@ -217,7 +217,7 @@ Aplicación Spring Boot 4.1.1 sobre Java 21, organizada por **dominios funcional
 | `votingpoint` | `VotingPoint`, `CodeGenerator` (código de 8 caracteres sin ambigüedades), `VotingPointService`, `VotingPointController`. | `GET/POST /api/voting-points`, `GET/PUT/DELETE /api/voting-points/{id}` |
 | `instance` | `VotingInstance`, `InstanceStatus` (`ACTIVE`, `CLOSED`), `InstanceService` (lanzar y detener), `InstanceMapper`, `InstanceController`. | `GET /api/instances?status=`, `POST /api/instances`, `POST /api/instances/{id}/stop` |
 | `vote` | `Ballot` (papeleta: una por dispositivo e instancia) con sus `Vote` (selecciones, con posición en RANKING); `BallotRepository` y `VoteRepository`. | — (lo usa la API pública) |
-| `stats` | `StatsService`, `StatsController`: papeletas por instancia y desglose por item calculado por la estrategia del tipo de votación (recuento o puntos Borda), incluyendo items borrados. | `GET /api/stats/instances`, `GET /api/stats/instances/{id}` |
+| `stats` | `StatsService`, `StatsController`: papeletas por instancia y desglose por item calculado por la estrategia del tipo de votación (recuento o puntos Borda), incluyendo items borrados. Sobre la misma función `score` de la estrategia se construyen los resultados agregados de una votación (se concatenan las selecciones de sus lanzamientos y se suman las papeletas, con filtro opcional por punto) y el historial de un item (se puntúa cada lanzamiento en el que fue candidato y se extrae su puesto). Las consultas de papeletas y selecciones se hacen por lotes de instancias para evitar una consulta por lanzamiento. | `GET /api/stats/instances?votingId=&votingPointId=`, `GET /api/stats/instances/{id}`, `GET /api/stats/votings/{id}?votingPointId=`, `GET /api/stats/items/{id}` |
 | `publicapi` | `PublicVotingService`, `PublicVotingController`: lo único que consume la voting app. | `GET /api/public/points/{code}`, `POST /api/public/points/{code}/votes` |
 
 Flujo de una petición autenticada:
@@ -518,14 +518,15 @@ src/app/
     errors.ts             traduce ProblemDetail a mensaje + errores por campo
     models.ts             interfaces espejo de los DTOs del backend
   shared/     Componentes reutilizables sin lógica de negocio
-    icons.ts, toast, confirm-dialog, page-header, empty-state, copy-button, loading
+    icons.ts, toast, confirm-dialog, page-header, empty-state, copy-button, loading, results-list (clasificación con barras)
   features/   Una carpeta por sección del dashboard
     auth/           login.page, register.page, auth-layout
     dashboard/      shell (menú lateral + outlet), home.page (lanzar / detener)
     items/          items-list.page, item-form.page (multipart con vista previa)
     votings/        votings-list.page, voting-form.page (selección y orden de items)
     voting-points/  points-list.page, point-form.page
-    stats/          stats-list.page, stats-detail.page (barras, refresco cada 5 s si está activa)
+    stats/          stats-list.page (filtros por punto y votación), stats-detail.page (refresco cada 5 s si está activa),
+                    voting-stats.page (suma de lanzamientos de una votación, selector de punto), item-history.page (historial de un item)
 ```
 
 Rutas:
@@ -547,7 +548,7 @@ Patrones que se repiten en todas las páginas:
 **Especificación para draw.io**
 
 - Lienzo horizontal. Tres columnas: **features (páginas)**, **core (servicios)**, **backend**.
-- Columna izquierda: un contenedor grande **ShellComponent** (borde `#5eba8c`) que engloba seis cajas: `HomePage`, `ItemsListPage / ItemFormPage`, `VotingsListPage / VotingFormPage`, `PointsListPage / PointFormPage`, `StatsListPage / StatsDetailPage`. Fuera del contenedor, arriba: `LoginPage`, `RegisterPage`. Junto al contenedor, una etiqueta "authGuard"; junto a las páginas de auth, "guestGuard".
+- Columna izquierda: un contenedor grande **ShellComponent** (borde `#5eba8c`) que engloba seis cajas: `HomePage`, `ItemsListPage / ItemFormPage`, `VotingsListPage / VotingFormPage`, `PointsListPage / PointFormPage`, `StatsListPage / StatsDetailPage / VotingStatsPage / ItemHistoryPage`. Fuera del contenedor, arriba: `LoginPage`, `RegisterPage`. Junto al contenedor, una etiqueta "authGuard"; junto a las páginas de auth, "guestGuard".
 - Columna central: cajas `ApiService`, `AuthService`, `ToastService`, `ConfirmService`, `authInterceptor` (esta última con forma de rombo o hexágono para indicar que intercepta).
 - Columna derecha: caja `Backend /api/*`.
 - Conexiones:

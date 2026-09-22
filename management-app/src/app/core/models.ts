@@ -81,7 +81,9 @@ export interface VotingPointRequest {
 
 export interface InstanceStatsSummary {
   id: number;
+  votingPointId: number;
   votingPointName: string;
+  votingId: number;
   votingName: string;
   status: InstanceStatus;
   startedAt: string;
@@ -111,6 +113,64 @@ export interface InstanceStatsDetail {
   maxSelections: number | null;
   scoringLabel: string;
   results: ItemResult[];
+}
+
+export interface PointRef {
+  id: number;
+  name: string;
+}
+
+/** Resultados agregados de una votación: todos sus lanzamientos o solo los del punto filtrado. */
+export interface VotingStatsDetail {
+  votingId: number;
+  votingName: string;
+  votingDeleted: boolean;
+  type: VotingType;
+  maxSelections: number | null;
+  scoringLabel: string;
+  /** Punto por el que se ha filtrado, o null si se suman todos. */
+  votingPointId: number | null;
+  instanceCount: number;
+  totalVotes: number;
+  /** Puntos con algún lanzamiento de la votación (sin aplicar el filtro). */
+  points: PointRef[];
+  results: ItemResult[];
+  instances: InstanceStatsSummary[];
+}
+
+/** Resultado de un item en un lanzamiento concreto. */
+export interface ItemParticipation {
+  instanceId: number;
+  votingName: string;
+  votingPointName: string;
+  type: VotingType;
+  scoringLabel: string;
+  status: InstanceStatus;
+  startedAt: string;
+  endedAt: string | null;
+  totalBallots: number;
+  /** Puesto en la clasificación del lanzamiento (1 = primero). */
+  position: number;
+  /** Items clasificados en ese lanzamiento. */
+  candidates: number;
+  votes: number;
+  points: number;
+  averageRank: number | null;
+  firstPlaces: number;
+  percentage: number;
+}
+
+/** Histórico de un item a lo largo de los lanzamientos en los que fue candidato. */
+export interface ItemHistory {
+  itemId: number;
+  itemName: string;
+  imageUrl: string | null;
+  deleted: boolean;
+  participations: number;
+  totalVotes: number;
+  wins: number;
+  averagePercentage: number | null;
+  history: ItemParticipation[];
 }
 
 /** Cuerpo de error RFC 9457 que devuelve el backend. */

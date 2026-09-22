@@ -79,6 +79,12 @@ import { PageHeaderComponent } from '../../shared/page-header.component';
                 </td>
                 <td>
                   <div class="actions">
+                    <a
+                      [routerLink]="['/estadisticas/votaciones', v.id]"
+                      class="btn btn-ghost btn-sm"
+                      title="Resultados agregados de todos sus lanzamientos"
+                      ><lucide-icon [img]="icons.stats" [size]="15" /> Resultados</a
+                    >
                     <a [routerLink]="['/votaciones', v.id]" class="btn btn-ghost btn-sm"
                       ><lucide-icon [img]="icons.edit" [size]="15" /> Editar</a
                     >

@@ -13,4 +13,7 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 	Optional<Item> findByIdAndOwnerIdAndDeletedAtIsNull(long id, long ownerId);
 
 	List<Item> findAllByIdInAndOwnerIdAndDeletedAtIsNull(Collection<Long> ids, long ownerId);
+
+	/** Incluye items borrados: las estadisticas conservan su historico. */
+	Optional<Item> findByIdAndOwnerId(long id, long ownerId);
 }

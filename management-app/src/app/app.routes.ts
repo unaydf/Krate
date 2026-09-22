@@ -76,6 +76,16 @@ export const routes: Routes = [
           import('./features/stats/stats-list.page').then((m) => m.StatsListPage),
       },
       {
+        path: 'estadisticas/votaciones/:id',
+        loadComponent: () =>
+          import('./features/stats/voting-stats.page').then((m) => m.VotingStatsPage),
+      },
+      {
+        path: 'estadisticas/items/:id',
+        loadComponent: () =>
+          import('./features/stats/item-history.page').then((m) => m.ItemHistoryPage),
+      },
+      {
         path: 'estadisticas/:id',
         loadComponent: () =>
           import('./features/stats/stats-detail.page').then((m) => m.StatsDetailPage),

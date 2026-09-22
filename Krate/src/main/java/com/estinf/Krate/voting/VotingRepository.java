@@ -14,4 +14,8 @@ public interface VotingRepository extends JpaRepository<Voting, Long> {
 
 	@Query("select v from Voting v left join fetch v.items where v.id = :id and v.ownerId = :ownerId and v.deletedAt is null")
 	Optional<Voting> findActiveByIdAndOwner(@Param("id") long id, @Param("ownerId") long ownerId);
+
+	/** Incluye votaciones borradas: las estadisticas conservan su historico. */
+	@Query("select v from Voting v left join fetch v.items where v.id = :id and v.ownerId = :ownerId")
+	Optional<Voting> findByIdAndOwner(@Param("id") long id, @Param("ownerId") long ownerId);
 }

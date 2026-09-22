@@ -1,5 +1,5 @@
 import { Component, DestroyRef, OnInit, computed, inject, input, signal } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { ApiService } from '../../core/api.service';
@@ -10,6 +10,7 @@ import { ToastService } from '../../core/toast.service';
 import { ICONS } from '../../shared/icons';
 import { LoadingComponent } from '../../shared/loading.component';
 import { PageHeaderComponent } from '../../shared/page-header.component';
+import { ResultsListComponent } from '../../shared/results-list.component';
 
 const REFRESH_MS = 5000;
 
@@ -17,11 +18,11 @@ const REFRESH_MS = 5000;
   selector: 'app-stats-detail-page',
   imports: [
     DatePipe,
-    DecimalPipe,
     RouterLink,
     LucideAngularModule,
     PageHeaderComponent,
     LoadingComponent,
+    ResultsListComponent,
   ],
   template: `
     <app-page-header title="Resultados" [subtitle]="subtitle()">
@@ -71,50 +72,8 @@ const REFRESH_MS = 5000;
             }
           </span>
         </div>
-        <div class="card-body results">
-          @for (r of d.results; track r.itemId; let i = $index) {
-            <div class="result" [class.winner]="i === 0 && r.points > 0">
-              <div class="head">
-                <span class="name row">
-                  @if (r.imageUrl) {
-                    <img [src]="r.imageUrl" [alt]="r.itemName" class="thumb" />
-                  }
-                  <span class="truncate">{{ r.itemName }}</span>
-                  @if (r.deleted) {
-                    <span class="badge badge-neutral">Item eliminado</span>
-                  }
-                </span>
-                <span class="nums">
-                  <span>
-                    <strong>{{ r.points }}</strong
-                    >&nbsp;<span class="muted"
-                      >{{ unit(d.scoringLabel, r.points) }} · {{ r.percentage }}%</span
-                    >
-                  </span>
-                  @if (d.type === 'RANKING') {
-                    <span class="muted small detail">
-                      posición media
-                      {{ r.averageRank !== null ? (r.averageRank | number: '1.0-2') : '—' }} ·
-                      {{ r.firstPlaces }}
-                      {{ r.firstPlaces === 1 ? 'primer puesto' : 'primeros puestos' }} · en
-                      {{ r.votes }} {{ r.votes === 1 ? 'participación' : 'participaciones' }}
-                    </span>
-                  }
-                </span>
-              </div>
-              <div
-                class="bar"
-                role="progressbar"
-                [attr.aria-valuenow]="r.percentage"
-                aria-valuemin="0"
-                aria-valuemax="100"
-              >
-                <div class="fill" [style.width.%]="r.percentage"></div>
-              </div>
-            </div>
-          } @empty {
-            <p class="muted">Esta votación no tiene items.</p>
-          }
+        <div class="card-body">
+          <app-results-list [results]="d.results" [type]="d.type" [scoringLabel]="d.scoringLabel" />
         </div>
       </section>
     }
@@ -130,54 +89,6 @@ const REFRESH_MS = 5000;
     }
     .big {
       font-size: 1.6rem;
-    }
-    .results {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-    .head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-      margin-bottom: 0.4rem;
-    }
-    .name {
-      min-width: 0;
-      font-weight: 500;
-    }
-    .thumb {
-      width: 32px;
-      height: 32px;
-    }
-    .nums {
-      white-space: nowrap;
-      text-align: right;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 0.1rem;
-    }
-    .detail {
-      white-space: normal;
-      max-width: 260px;
-    }
-    .bar {
-      height: 12px;
-      background: var(--surface-2);
-      border-radius: 999px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-    }
-    .fill {
-      height: 100%;
-      background: var(--primary);
-      border-radius: 999px;
-      transition: width 0.4s ease;
-    }
-    .winner .fill {
-      background: var(--success);
     }
     @media (max-width: 960px) {
       .summary {
@@ -198,10 +109,6 @@ export class StatsDetailPage implements OnInit {
   readonly typeLabel = votingTypeLabel;
   readonly typeIcon = votingTypeIcon;
 
-  /** "puntos" → "punto" cuando la cifra es 1. */
-  unit(label: string, n: number): string {
-    return n === 1 && label.endsWith('s') ? label.slice(0, -1) : label;
-  }
   readonly subtitle = computed(() => {
     const d = this.data();
     return d ? `${d.instance.votingName} en ${d.instance.votingPointName}` : '';

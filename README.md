@@ -30,6 +30,7 @@ Reglas de negocio:
 - Cada gestor solo ve y administra sus propios datos.
 - Mientras una votación está activa no se pueden borrar ni ella, ni sus items, ni el punto, ni cambiar la lista de items, el tipo de votación, el máximo de votos o la votación asignada al punto. Nombre y descripción sí.
 - El borrado es **lógico**: lo borrado desaparece de los listados y deja de poder usarse, pero las estadísticas históricas se conservan (los items borrados se marcan como tales).
+- Las estadísticas se consultan a tres niveles: por lanzamiento, agregadas por votación (con filtro por punto de votación) y como historial de un item a lo largo de todas las votaciones en las que ha participado.
 
 ## Arranque con Docker (local)
 
@@ -125,7 +126,9 @@ Qué prueba cada nivel, cómo está construido y qué valor aporta se describe e
 | `GET/POST /api/votings`, `GET/PUT/DELETE /api/votings/{id}` | JWT | Votaciones (`type`, `maxSelections`, `itemIds` ordenados) |
 | `GET/POST /api/voting-points`, `GET/PUT/DELETE /api/voting-points/{id}` | JWT | Puntos (devuelven `code` y `publicUrl`) |
 | `GET /api/instances?status=ACTIVE`, `POST /api/instances`, `POST /api/instances/{id}/stop` | JWT | Lanzar y detener |
-| `GET /api/stats/instances`, `GET /api/stats/instances/{id}` | JWT | Resultados por instancia |
+| `GET /api/stats/instances?votingId=&votingPointId=`, `GET /api/stats/instances/{id}` | JWT | Lanzamientos (filtros opcionales por votación y punto) y resultados de uno |
+| `GET /api/stats/votings/{id}?votingPointId=` | JWT | Resultados agregados de una votación: suma de todos sus lanzamientos o solo los de un punto |
+| `GET /api/stats/items/{id}` | JWT | Historial de un item: posición, votos y porcentaje en cada lanzamiento en el que fue candidato |
 | `GET /api/public/points/{code}` (header `X-Voter-Token`), `POST /api/public/points/{code}/votes` (`itemIds` en orden de preferencia) | — | API pública de la voting app |
 | `GET /api/files/{nombre}` | — | Imágenes de items |
 

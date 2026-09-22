@@ -7,11 +7,18 @@ import {
   InstanceStatsSummary,
   InstanceStatus,
   Item,
+  ItemHistory,
   Voting,
   VotingPoint,
   VotingPointRequest,
   VotingRequest,
+  VotingStatsDetail,
 } from './models';
+
+export interface StatsFilter {
+  votingId?: number | null;
+  votingPointId?: number | null;
+}
 
 export interface ItemFormData {
   name: string;
@@ -89,12 +96,33 @@ export class ApiService {
   }
 
   // Estadísticas
-  listStats(): Promise<InstanceStatsSummary[]> {
-    return firstValueFrom(this.http.get<InstanceStatsSummary[]>('/api/stats/instances'));
+  listStats(filter: StatsFilter = {}): Promise<InstanceStatsSummary[]> {
+    const params = toParams(filter);
+    return firstValueFrom(
+      this.http.get<InstanceStatsSummary[]>('/api/stats/instances', { params }),
+    );
   }
   statsDetail(id: number): Promise<InstanceStatsDetail> {
     return firstValueFrom(this.http.get<InstanceStatsDetail>(`/api/stats/instances/${id}`));
   }
+  votingStats(id: number, votingPointId?: number | null): Promise<VotingStatsDetail> {
+    const params = toParams({ votingPointId });
+    return firstValueFrom(this.http.get<VotingStatsDetail>(`/api/stats/votings/${id}`, { params }));
+  }
+  itemHistory(id: number): Promise<ItemHistory> {
+    return firstValueFrom(this.http.get<ItemHistory>(`/api/stats/items/${id}`));
+  }
+}
+
+/** Convierte un filtro en parámetros de consulta, omitiendo los vacíos. */
+function toParams(filter: StatsFilter): HttpParams {
+  let params = new HttpParams();
+  for (const [key, value] of Object.entries(filter)) {
+    if (value !== null && value !== undefined) {
+      params = params.set(key, String(value));
+    }
+  }
+  return params;
 }
 
 function toMultipart(data: ItemFormData): FormData {
