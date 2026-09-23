@@ -11,7 +11,7 @@ import { ICONS } from '../../shared/icons';
     <div class="shell" [class.open]="menuOpen()">
       <aside class="sidebar">
         <div class="brand">
-          <span class="logo"><lucide-icon [img]="icons.voting" [size]="20" /></span>
+          <img class="logo" src="favicon.svg" alt="" />
           <span>Krate</span>
           <button
             type="button"
@@ -63,6 +63,7 @@ import { ICONS } from '../../shared/icons';
           >
             <lucide-icon [img]="icons.menu" [size]="22" />
           </button>
+          <img class="logo-sm" src="favicon.svg" alt="" />
           <span class="brand-sm">Krate</span>
         </div>
         <div class="content">
@@ -99,13 +100,8 @@ import { ICONS } from '../../shared/icons';
       margin-left: auto;
     }
     .logo {
-      display: inline-grid;
-      place-items: center;
       width: 32px;
       height: 32px;
-      border-radius: 9px;
-      background: var(--primary);
-      color: #fff;
     }
     nav {
       display: flex;
@@ -168,6 +164,10 @@ import { ICONS } from '../../shared/icons';
       padding: 0.6rem 1rem;
       background: var(--surface);
       border-bottom: 1px solid var(--border);
+    }
+    .logo-sm {
+      width: 26px;
+      height: 26px;
     }
     .brand-sm {
       font-weight: 700;

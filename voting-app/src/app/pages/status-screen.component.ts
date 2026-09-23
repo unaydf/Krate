@@ -7,7 +7,13 @@ import { LucideAngularModule, LucideIconData } from 'lucide-angular';
   imports: [LucideAngularModule],
   template: `
     <section class="screen" [class]="'screen ' + tone()">
-      <div class="icon"><lucide-icon [img]="icon()" [size]="40" /></div>
+      <div class="icon">
+        @if (image(); as src) {
+          <img [src]="src" alt="" />
+        } @else {
+          <lucide-icon [img]="icon()!" [size]="40" />
+        }
+      </div>
       <h1>{{ title() }}</h1>
       @if (message()) {
         <p class="muted">{{ message() }}</p>
@@ -38,6 +44,10 @@ import { LucideAngularModule, LucideIconData } from 'lucide-angular';
       background: var(--surface-2);
       color: var(--text-2);
     }
+    .icon img {
+      width: 52px;
+      height: 52px;
+    }
     .success .icon {
       background: var(--success-soft);
       color: var(--success);
@@ -56,7 +66,9 @@ import { LucideAngularModule, LucideIconData } from 'lucide-angular';
   `,
 })
 export class StatusScreenComponent {
-  readonly icon = input.required<LucideIconData>();
+  readonly icon = input<LucideIconData>();
+  /** Imagen que sustituye al icono (p. ej. el logo de Krate). */
+  readonly image = input<string>();
   readonly title = input.required<string>();
   readonly message = input<string>();
   readonly tone = input<'neutral' | 'success' | 'danger' | 'primary'>('neutral');

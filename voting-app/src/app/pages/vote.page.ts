@@ -57,7 +57,7 @@ type View = 'loading' | 'not-found' | 'inactive' | 'vote' | 'done' | 'error';
       }
       @case ('done') {
         <app-status-screen
-          [icon]="icons.done"
+          image="favicon.svg"
           title="Gracias por votar"
           tone="success"
           [message]="
@@ -162,6 +162,8 @@ type View = 'loading' | 'not-found' | 'inactive' | 'vote' | 'done' | 'error';
               </li>
             }
           </ul>
+
+          <p class="brand"><img src="favicon.svg" alt="" /> Krate</p>
 
           <footer class="actions">
             <button
@@ -342,6 +344,20 @@ type View = 'loading' | 'not-found' | 'inactive' | 'vote' | 'done' | 'error';
       color: #fff;
       font-weight: 800;
       font-size: 0.95rem;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      margin: 0.5rem 0 0;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text-3);
+    }
+    .brand img {
+      width: 20px;
+      height: 20px;
     }
     .actions {
       position: fixed;
